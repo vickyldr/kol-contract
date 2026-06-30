@@ -134,12 +134,12 @@ export function RecordDetail({
   function buildParseSpec(): ParseSpecItem[] {
     const spec: ParseSpecItem[] = [
       { key: "legalName", desc: "法人姓名 / 签约人全名" },
-      { key: "socialAccount", desc: "社媒账号 (TikTok/Instagram/YouTube/Telegram)" },
-      { key: "kolLink", desc: "KOL 链接 / 发布频道 URL" },
-      { key: "platform", desc: "发布平台" },
+      { key: "socialAccount", desc: "社媒账号或主页链接（TikTok/Instagram/YouTube/Telegram，可与 kolLink 相同）" },
+      { key: "kolLink", desc: "发布频道/主页链接（只给一个链接时与 socialAccount 填一样即可）" },
+      { key: "platform", desc: "发布平台（可从链接推断，如 instagram.com→Instagram）" },
       { key: "unitPrice", desc: "单价（每条视频价格，带币种，如 USD 500）" },
       { key: "videoCount", desc: "合作视频数量（数字）" },
-      { key: "kolCountry", desc: "红人国家/地区" },
+      { key: "kolCountry", desc: "收款账户所在国家/地区（用于制裁/地区检查）" },
       { key: "email", desc: "邮箱（如有）" },
       { key: "accountBlock", desc: "收款用本人账户还是亲友/第三方账户：own 或 third" },
     ];
@@ -394,11 +394,11 @@ export function RecordDetail({
             />
           </label>
           <label>
-            红人国家/地区
+            收款账户所在国家/地区
             <input
               value={record.fields.kolCountry}
               onChange={(e) => setFieldsObj({ kolCountry: e.target.value })}
-              placeholder="如 Taiwan / Turkey（用于制裁名单与地区规则检查）"
+              placeholder="如 Taiwan / Turkey（收款账户所在国家，用于制裁/地区检查）"
             />
           </label>
         </div>
