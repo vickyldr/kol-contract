@@ -340,11 +340,9 @@ export function RecordDetail({
         >
           {aiBusy ? "识别中…" : "AI 识别并自动填充"}
         </button>
-        {!revealed && (
-          <button className="link" onClick={() => setRevealed(true)}>
-            或手动填写（不用 AI）
-          </button>
-        )}
+        <button className="link" onClick={() => setRevealed((v) => !v)}>
+          {revealed ? "收起下面的表单 ▲" : "或手动填写（不用 AI）▾"}
+        </button>
         {!bytes && <span className="muted"> （请先在上方选择模板）</span>}
 
         {parseMissing && (
