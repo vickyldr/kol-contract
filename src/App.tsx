@@ -1,20 +1,26 @@
-import { useState } from "react";
-import { BasicMode } from "./components/BasicMode";
-import { AdvancedMode } from "./components/AdvancedMode";
-import { TemplateManager } from "./components/TemplateManager";
+import { useEffect, useState } from "react";
+import { Records } from "./components/Records";
+import { Templates } from "./components/Templates";
+import { Products } from "./components/Products";
 import { Settings } from "./components/Settings";
+import { loadBuiltins } from "./lib/templates";
 
-type Tab = "basic" | "advanced" | "templates" | "settings";
+type Tab = "records" | "templates" | "products" | "settings";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "basic", label: "① 合同填充" },
-  { id: "advanced", label: "② 合同修改" },
-  { id: "templates", label: "模板管理" },
+  { id: "records", label: "合同记录" },
+  { id: "templates", label: "模板" },
+  { id: "products", label: "产品" },
   { id: "settings", label: "设置" },
 ];
 
 export function App() {
-  const [tab, setTab] = useState<Tab>("basic");
+  const [tab, setTab] = useState<Tab>("records");
+
+  // warm the built-in template manifest once
+  useEffect(() => {
+    loadBuiltins();
+  }, []);
 
   return (
     <div className="app">
@@ -23,7 +29,7 @@ export function App() {
           <span className="logo">📄</span>
           <div>
             <div className="title">KOL 合同助手</div>
-            <div className="subtitle">模板自动填充 · AI 辅助改约 · 修改高亮</div>
+            <div className="subtitle">模板自动填充 · AI 辅助改约 · 修改高亮 · 按红人/产品归档</div>
           </div>
         </div>
         <nav className="tabs">
@@ -40,14 +46,14 @@ export function App() {
       </header>
 
       <main className="content">
-        {tab === "basic" && <BasicMode />}
-        {tab === "advanced" && <AdvancedMode />}
-        {tab === "templates" && <TemplateManager />}
+        {tab === "records" && <Records />}
+        {tab === "templates" && <Templates />}
+        {tab === "products" && <Products />}
         {tab === "settings" && <Settings />}
       </main>
 
       <footer className="foot">
-        所有数据仅保存在本浏览器（localStorage），不会上传到任何服务器；AI 调用直连 Anthropic。
+        所有数据仅保存在本浏览器（localStorage），不上传任何服务器；AI 调用直连 Anthropic。
       </footer>
     </div>
   );

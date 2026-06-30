@@ -1,5 +1,7 @@
 // Shared types for the KOL contract assistant.
 
+import type { KolField } from "./labels";
+
 export type Lang = "en" | "ko" | "ja";
 
 export const LANG_LABEL: Record<Lang, string> = {
@@ -16,84 +18,89 @@ export const PAYMENT_LABEL: Record<PaymentMethod, string> = {
   payoneer: "Payoneer",
 };
 
-// A stored Word template. The file bytes are kept base64-encoded so the whole
-// library survives a page reload via localStorage / IndexedDB.
+// A product (e.g. Rythmix). `contractName` replaces the 【Rythmix】 token in the
+// contract body when this product is selected.
+export interface Product {
+  id: string;
+  name: string;
+  contractName: string;
+  createdAt: number;
+}
+
+// A stored Word template. Built-in templates ship with the app (id "builtin:*"
+// and are fetched on demand); uploaded ones keep their bytes here as base64.
 export interface Template {
   id: string;
   name: string;
   lang: Lang;
+  payment: string; // bank | paypal | payoneer | ""
   fileName: string;
-  // base64 of the .docx bytes
-  data: string;
+  builtin: boolean;
+  data?: string; // base64 (uploaded only)
   createdAt: number;
 }
 
-// Values collected from the autofill form. Keys here become docxtemplater tags,
-// e.g. {legalName}. `paymentInfo` is the assembled, method-specific block.
+// Autofill inputs, saved on the record so the filled contract is reproducible.
 export interface ContractFields {
-  legalName: string;
-  kolLink: string;
+  kol: Partial<Record<KolField, string>>;
   unitPrice: string;
   videoCount: string;
-  platform: string;
-  paymentMethod: PaymentMethod;
-  // method-specific raw fields
-  bank: BankFields;
-  paypal: PaypalFields;
-  payoneer: PayoneerFields;
-  // free extra tags the user may have added to a template: tag -> value
-  extra: Record<string, string>;
+  // payment values keyed by the template's normalized payment label
+  payment: Record<string, string>;
 }
 
-export interface BankFields {
-  accountName: string;
-  bankName: string;
-  accountNumber: string; // or IBAN
-  swift: string;
-  bankAddress: string;
+export function emptyFields(): ContractFields {
+  return { kol: {}, unitPrice: "", videoCount: "", payment: {} };
 }
 
-export interface PaypalFields {
-  email: string;
-  accountName: string;
-}
-
-export interface PayoneerFields {
-  email: string;
-  accountName: string;
-  customerId: string;
-}
-
-// ---- Advanced modification workflow ----
+// ---- modification workflow ----
 
 export type CaseStatus = "draft" | "tl_review" | "kol_reply" | "done";
 
-// One agreed edit to apply to the contract, surfaced from the AI step.
 export interface ContractEdit {
-  // text to locate in the contract (verbatim original)
   find: string;
-  // replacement text (already the final agreed wording)
   replace: string;
-  // short note: why / what changed (shown to TL & KOL)
   note: string;
 }
 
+// One round of modification negotiation attached to a record.
 export interface ModCase {
   id: string;
   title: string;
-  lang: Lang;
   status: CaseStatus;
   createdAt: number;
   updatedAt: number;
-
-  // Step 1: KOL original message + AI summary for TL
   kolOriginal: string;
-  tlBriefing: string; // AI: clean Chinese summary to paste to TL
-
-  // Step 2: TL reply + AI message back to KOL
+  tlBriefing: string; // AI: Chinese summary to paste to TL
   tlReply: string;
-  kolReply: string; // AI: message in KOL's language to paste to KOL
-
-  // Step 5: agreed edits used to generate the highlighted contract
+  kolReply: string; // AI: message in KOL's language
   edits: ContractEdit[];
+}
+
+// One record per (KOL + product): holds autofill inputs and modification rounds.
+export interface Record_ {
+  id: string;
+  kolName: string;
+  productId: string;
+  templateId: string;
+  lang: Lang;
+  fields: ContractFields;
+  mods: ModCase[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export function newModCase(now: number): ModCase {
+  return {
+    id: "",
+    title: "修改 " + new Date(now).toLocaleDateString("zh-CN"),
+    status: "draft",
+    createdAt: now,
+    updatedAt: now,
+    kolOriginal: "",
+    tlBriefing: "",
+    tlReply: "",
+    kolReply: "",
+    edits: [],
+  };
 }

@@ -1,11 +1,12 @@
-// Lightweight persistence on top of localStorage. Templates can be large
-// (a .docx is tens of KB base64), so they live under their own key and we keep
-// the API tiny and synchronous to stay simple.
+// Persistence on localStorage. Built-in templates are NOT stored here (they are
+// fetched from /public on demand); only products, records, uploaded templates,
+// and settings live in storage.
 
-import type { ModCase, Template } from "./types";
+import type { Product, Record_, Template } from "./types";
 
-const TEMPLATE_KEY = "kol.templates.v1";
-const CASE_KEY = "kol.cases.v1";
+const PRODUCT_KEY = "kol.products.v1";
+const RECORD_KEY = "kol.records.v1";
+const UPLOAD_TPL_KEY = "kol.uploadedTemplates.v1";
 const APIKEY_KEY = "kol.anthropic.key";
 const MODEL_KEY = "kol.anthropic.model";
 
@@ -21,49 +22,27 @@ function read<T>(key: string, fallback: T): T {
 }
 
 function write(key: string, value: unknown): void {
-  localStorage.setItem(key, JSON.stringify(value));
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    alert("保存失败：浏览器存储空间可能已满。" + (e as Error).message);
+  }
 }
 
 export function genId(): string {
-  return (
-    Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8)
-  );
+  return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
 }
 
-// ---- Templates ----
+export const loadProducts = (): Product[] => read<Product[]>(PRODUCT_KEY, []);
+export const saveProducts = (l: Product[]): void => write(PRODUCT_KEY, l);
 
-export function loadTemplates(): Template[] {
-  return read<Template[]>(TEMPLATE_KEY, []);
-}
+export const loadRecords = (): Record_[] => read<Record_[]>(RECORD_KEY, []);
+export const saveRecords = (l: Record_[]): void => write(RECORD_KEY, l);
 
-export function saveTemplates(list: Template[]): void {
-  write(TEMPLATE_KEY, list);
-}
+export const loadUploadedTemplates = (): Template[] => read<Template[]>(UPLOAD_TPL_KEY, []);
+export const saveUploadedTemplates = (l: Template[]): void => write(UPLOAD_TPL_KEY, l);
 
-// ---- Cases ----
-
-export function loadCases(): ModCase[] {
-  return read<ModCase[]>(CASE_KEY, []);
-}
-
-export function saveCases(list: ModCase[]): void {
-  write(CASE_KEY, list);
-}
-
-// ---- Settings ----
-
-export function getApiKey(): string {
-  return localStorage.getItem(APIKEY_KEY) ?? "";
-}
-
-export function setApiKey(key: string): void {
-  localStorage.setItem(APIKEY_KEY, key);
-}
-
-export function getModel(): string {
-  return localStorage.getItem(MODEL_KEY) ?? DEFAULT_MODEL;
-}
-
-export function setModel(model: string): void {
-  localStorage.setItem(MODEL_KEY, model);
-}
+export const getApiKey = (): string => localStorage.getItem(APIKEY_KEY) ?? "";
+export const setApiKey = (k: string): void => localStorage.setItem(APIKEY_KEY, k);
+export const getModel = (): string => localStorage.getItem(MODEL_KEY) ?? DEFAULT_MODEL;
+export const setModel = (m: string): void => localStorage.setItem(MODEL_KEY, m);
