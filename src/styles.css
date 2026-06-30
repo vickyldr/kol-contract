@@ -448,6 +448,11 @@ button:disabled {
   background: #fff4e5;
   color: var(--warn);
 }
+.handle {
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+}
 .badge.builtin {
   background: #e8f0ff;
   color: var(--primary);
