@@ -34,7 +34,7 @@ async function callOnce(system: string, user: string, maxTokens: number): Promis
   const provider = getProvider();
   const key = getApiKey(provider);
   const model = getModel(provider);
-  if (!key) throw new Error("尚未设置 API Key，请在「设置」中填写。");
+  if (!key) throw new Error("AI 服务未配置（请联系管理员在部署环境中设置 API Key）。");
 
   if (provider === "anthropic") {
     const res = await fetchWithTimeout(ANTHROPIC_URL, {
@@ -132,6 +132,49 @@ export async function messageForKOL(
   ].join("\n");
   const user = `红人原诉求：\n"""\n${kolOriginal}\n"""\n\nTL 的内部判断：\n"""\n${tlReply}\n"""`;
   return callLLM(system, user);
+}
+
+// Extract structured contract fields from a blob of pasted info. `spec` lists
+// the fields to look for (key + Chinese description, including the template's
+// payment labels). Returns the recognized values plus the fields it couldn't
+// find / is unsure about (each with a question to ask the teammate).
+export interface ParseSpecItem {
+  key: string;
+  desc: string;
+}
+export interface ParseResult {
+  values: Record<string, string>;
+  missing: { key: string; question: string }[];
+}
+export async function parseContractInfo(
+  rawText: string,
+  spec: ParseSpecItem[],
+): Promise<ParseResult> {
+  const system = [
+    "你是合同信息抽取助手。用户会一股脑粘贴红人给的杂乱信息（可能多语言、含付款/银行信息）。",
+    "请从中抽取下列字段，只输出一个 JSON 对象，形如：",
+    '{"values": {"<key>": "<抽取到的值>"}, "missing": [{"key":"<key>","question":"<用中文问同学的一句话>"}]}',
+    "规则：",
+    "1) 只抽取你能确定的值，绝不编造；不确定或找不到的字段放进 missing 并给出要追问的问题。",
+    "2) 金额带上币种（如 USD 500）。accountBlock 只能是 own 或 third（收款人姓名与签约人明显不一致时填 third）。",
+    "3) 银行账号原样保留；邮箱保持邮箱格式。地址按 街道/城市/省州 拆开到对应 key。",
+    "4) 值用原文语言/原始格式，不要翻译人名、账号、地址。",
+    "只输出 JSON，不要任何解释。",
+  ].join("\n");
+  const fieldList = spec.map((s) => `- ${s.key}: ${s.desc}`).join("\n");
+  const user = `【要抽取的字段】\n${fieldList}\n\n【红人粘贴的原始信息】\n"""\n${rawText}\n"""`;
+  const raw = await callLLM(system, user, 1500);
+  const parsed = extractJson(raw) as Partial<ParseResult>;
+  const values =
+    parsed && typeof parsed.values === "object" && parsed.values ? parsed.values : {};
+  const missing = Array.isArray(parsed?.missing) ? parsed.missing : [];
+  // keep only string values for known keys
+  const cleanValues: Record<string, string> = {};
+  for (const [k, v] of Object.entries(values)) if (typeof v === "string" && v.trim()) cleanValues[k] = v.trim();
+  return {
+    values: cleanValues,
+    missing: missing.filter((m): m is { key: string; question: string } => !!m && typeof m.question === "string"),
+  };
 }
 
 // Convert a Chinese description of a custom prepay arrangement into a contract

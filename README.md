@@ -21,7 +21,8 @@ npm run preview  # 预览构建结果
 
 1. **产品**：先在「产品」页添加产品（如 Rythmix）。产品名会替换合同正文里的 `【Rythmix】`。
 2. **合同记录 → 新建记录**：
-   - 填红人姓名、选产品、选模板（语言自动识别）。
+   - 选产品、选模板（语言自动识别）。
+   - **① 一键智能填充**：把红人给的所有信息（姓名、链接、单价、银行/PayPal 收款信息…）一股脑粘贴进去，AI 自动识别并填到对应栏位；缺失或对不上的会列出来问你，补充后再点一次或手动改即可。
    - 填红人合同信息：法人姓名、社媒账号、KOL 链接、发布平台、单价、合作视频数量；付款字段会**根据所选模板自动出现**（如 bank 模板出现 IBAN / SWIFT / Bank Name，paypal 模板出现 Paypal Name / Email）。
    - 付款信息可选「**本人账户 own account / 第三方账户 third-party**」，自动填入对应的账户栏。
    - 银行模板的注册地址会拆成**街道 / 城市 / 省州**三格填写，自动合并进 Registered Address。
@@ -59,18 +60,19 @@ npm run preview  # 预览构建结果
 1. Vercel → New Project → Import 本仓库 → Framework 选 **Vite** → Deploy。
 2. 想让同学**免填 Key**：在 Vercel 项目的 **Settings → Environment Variables** 添加
    `VITE_QWEN_KEY = <你的千问 Key>`（用 Claude 则 `VITE_ANTHROPIC_KEY`），保存后 **Redeploy**。
-   之后 App 会自动用这个 Key，同学无需在「设置」里填写（设置页会提示「已内置默认 Key」）。
+   之后 App 会自动用这个 Key，**同学打开即用、无需任何配置**（网页里已没有填 Key 的入口）。
+   只设 `VITE_ANTHROPIC_KEY`（不设 `VITE_QWEN_KEY`）则自动切到 Claude。
 
 > ⚠️ 这是纯前端应用，内置 Key 会随网页打包、能在浏览器里被看到——仅适合**内部使用**。请给该 Key
 > 设置**消费上限**，泄露时在阿里云百炼控制台**轮换**即可。Key 只存在 Vercel 环境变量里，不进 Git 仓库。
-> 同学若在「设置」里填了自己的 Key，则优先用自己的。
+> 本地开发可在项目根目录建 `.env.local` 写 `VITE_QWEN_KEY=...`。
 
-## 设置（AI 服务商）
+## AI 服务商
 
-「合同修改」的翻译 / 总结 / 改约支持两家：
+「合同修改」的翻译 / 总结 / 改约：
 
-- **通义千问 Qwen（推荐，便宜）**：默认 `qwen-flash`，约 $0.05 / 百万输入 token、$0.40 / 百万输出，一次改约（3 次调用）通常不到 1 分钱。Key 在阿里云百炼（Model Studio）控制台获取；用国际站 `dashscope-intl` 直连，浏览器可直接调用（带 CORS）。
-- **Claude（Anthropic）**：默认 `claude-opus-4-8`，质量更高、更贵。
+- **通义千问 Qwen（默认）**：`qwen-flash`，约 $0.05 / 百万输入 token、$0.40 / 百万输出，一次改约（3 次调用）通常不到 1 分钱。用国际站 `dashscope-intl` 直连。
+- **Claude（Anthropic）**：`claude-opus-4-8`，质量更高、更贵。
 
 Key 仅存在本浏览器，请求直连服务商，不经过任何中间服务器。
 

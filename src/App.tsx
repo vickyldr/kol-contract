@@ -2,16 +2,14 @@ import { useEffect, useState } from "react";
 import { Records } from "./components/Records";
 import { Templates } from "./components/Templates";
 import { Products } from "./components/Products";
-import { Settings } from "./components/Settings";
 import { loadBuiltins } from "./lib/templates";
 
-type Tab = "records" | "templates" | "products" | "settings";
+type Tab = "records" | "templates" | "products";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "records", label: "合同记录" },
   { id: "templates", label: "模板" },
   { id: "products", label: "产品" },
-  { id: "settings", label: "设置" },
 ];
 
 export function App() {
@@ -49,11 +47,10 @@ export function App() {
         {tab === "records" && <Records />}
         {tab === "templates" && <Templates />}
         {tab === "products" && <Products />}
-        {tab === "settings" && <Settings />}
       </main>
 
       <footer className="foot">
-        所有数据仅保存在本浏览器（localStorage），不上传任何服务器；AI 调用直连 Anthropic。
+        数据仅保存在本浏览器（localStorage），不上传任何服务器；AI 由通义千问完成。
       </footer>
     </div>
   );

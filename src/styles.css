@@ -485,6 +485,14 @@ button:disabled {
   border-color: #d7def0;
   background: #fbfcff;
 }
+.smartfill {
+  border-color: #cdddff;
+  background: #f5f9ff;
+}
+.smartfill textarea {
+  margin-bottom: 10px;
+}
+
 .field-block {
   margin-bottom: 12px;
 }

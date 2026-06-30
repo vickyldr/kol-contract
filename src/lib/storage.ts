@@ -74,8 +74,14 @@ export const saveRecords = (l: Record_[]): void => write(RECORD_KEY, l);
 export const loadUploadedTemplates = (): Template[] => read<Template[]>(UPLOAD_TPL_KEY, []);
 export const saveUploadedTemplates = (l: Template[]): void => write(UPLOAD_TPL_KEY, l);
 
-export const getProvider = (): Provider =>
-  (localStorage.getItem(PROVIDER_KEY) as Provider) || "qwen";
+export const getProvider = (): Provider => {
+  const stored = localStorage.getItem(PROVIDER_KEY) as Provider | null;
+  if (stored) return stored;
+  // infer from whichever built-in key the admin configured (env vars)
+  const env = import.meta.env;
+  if (env.VITE_ANTHROPIC_KEY && !env.VITE_QWEN_KEY) return "anthropic";
+  return "qwen";
+};
 export const setProvider = (p: Provider): void => localStorage.setItem(PROVIDER_KEY, p);
 
 // A key baked in at build time via Vercel env vars (VITE_QWEN_KEY /
