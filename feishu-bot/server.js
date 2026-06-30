@@ -5,6 +5,7 @@
 
 import * as Lark from "@larksuiteoapi/node-sdk";
 import fs from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,13 +18,19 @@ const {
   QWEN_KEY,
   QWEN_BASE = "https://dashscope.aliyuncs.com", // intl: https://dashscope-intl.aliyuncs.com
   QWEN_MODEL = "qwen-plus",
+  // 可选：填了 ANTHROPIC_KEY 就用 Claude（注意 api.anthropic.com 在国内连不上，
+  // 需要机器人跑在海外服务器，或把 ANTHROPIC_BASE 指向一个国内可达的中转地址）
+  ANTHROPIC_KEY,
+  ANTHROPIC_BASE = "https://api.anthropic.com",
+  ANTHROPIC_MODEL = "claude-sonnet-4-6",
   HANDOFF_HINT = "我不太确定这个，建议直接找 TL 确认～",
 } = process.env;
 
-if (!FEISHU_APP_ID || !FEISHU_APP_SECRET || !QWEN_KEY) {
-  console.error("缺少环境变量：FEISHU_APP_ID / FEISHU_APP_SECRET / QWEN_KEY");
+if (!FEISHU_APP_ID || !FEISHU_APP_SECRET || (!QWEN_KEY && !ANTHROPIC_KEY)) {
+  console.error("缺少环境变量：FEISHU_APP_ID / FEISHU_APP_SECRET / (QWEN_KEY 或 ANTHROPIC_KEY)");
   process.exit(1);
 }
+const USE_CLAUDE = !!ANTHROPIC_KEY;
 
 const domain = FEISHU_DOMAIN === "lark" ? Lark.Domain.Lark : Lark.Domain.Feishu;
 const client = new Lark.Client({ appId: FEISHU_APP_ID, appSecret: FEISHU_APP_SECRET, domain });
@@ -51,6 +58,26 @@ async function answer(question) {
     "【团队知识库】",
     KNOWLEDGE,
   ].join("\n");
+  if (USE_CLAUDE) {
+    const res = await fetch(`${ANTHROPIC_BASE}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: 900,
+        system,
+        messages: [{ role: "user", content: question }],
+      }),
+    });
+    if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const j = await res.json();
+    return (j.content ?? []).filter((p) => p.type === "text").map((p) => p.text).join("").trim();
+  }
+
   const res = await fetch(`${QWEN_BASE}/compatible-mode/v1/chat/completions`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${QWEN_KEY}` },
@@ -121,4 +148,10 @@ const eventDispatcher = new Lark.EventDispatcher({}).register({
 });
 
 wsClient.start({ eventDispatcher });
-console.log(`feishu-bot 已启动（长连接模式）domain=${FEISHU_DOMAIN} model=${QWEN_MODEL}`);
+console.log(
+  `feishu-bot 已启动（长连接模式）domain=${FEISHU_DOMAIN} AI=${USE_CLAUDE ? "Claude " + ANTHROPIC_MODEL : "Qwen " + QWEN_MODEL}`,
+);
+
+// Tiny health server so PaaS hosts (Railway/Render) see an open port and keep
+// the service alive. The bot itself uses an outbound long connection.
+http.createServer((_req, res) => res.end("ok")).listen(process.env.PORT || 3000);
