@@ -16,7 +16,13 @@ import {
   type KolField,
 } from "../lib/labels";
 import { runChecks } from "../lib/checks";
-import { generatePrepayClause, parseContractInfo, type ParseSpecItem } from "../lib/llm";
+import {
+  detectTemplate,
+  generatePrepayClause,
+  parseContractInfo,
+  type ParseSpecItem,
+  type TemplateHint,
+} from "../lib/llm";
 import type { AccountBlock, ContractFields, Product, Record_, Template } from "../lib/types";
 import { LANG_LABEL } from "../lib/types";
 import { ModificationPanel } from "./ModificationPanel";
@@ -27,6 +33,52 @@ const OPTIONAL_KOL: KolField[] = ["email", "contactAddress", "identityNumber"];
 const ALL_KOL: KolField[] = [...PRIMARY_KOL, ...OPTIONAL_KOL];
 // top-level (non-kol, non-payment) keys the parser can fill directly
 const SCALAR_KEYS = ["unitPrice", "videoCount", "kolCountry", "currency", "addrStreet", "addrCity", "addrProvince"] as const;
+
+// Build the AI extraction spec from a template's detected fillable fields.
+function specFromFields(fields: FillableField[]): ParseSpecItem[] {
+  const pay = fields.filter((f) => f.kind === "payment");
+  const spec: ParseSpecItem[] = [
+    { key: "legalName", desc: "法人姓名 / 签约人全名" },
+    { key: "socialAccount", desc: "社媒账号或主页链接（TikTok/Instagram/YouTube/Telegram，可与 kolLink 相同）" },
+    { key: "kolLink", desc: "发布频道/主页链接（只给一个链接时与 socialAccount 填一样即可）" },
+    { key: "platform", desc: "发布平台（从链接推断）" },
+    { key: "unitPrice", desc: "单价（每条视频价格，带币种，如 USD 500 / 6000 TWD）" },
+    { key: "videoCount", desc: "合作视频数量（数字）" },
+    { key: "kolCountry", desc: "收款账户所在国家/地区（仅银行收款需要）" },
+    { key: "accountBlock", desc: "本人账户还是亲友/第三方账户：own 或 third" },
+  ];
+  if (pay.some((f) => f.key === ACCOUNT_TYPE_KEY))
+    spec.push({ key: "currency", desc: "银行账户币种 Account Type（如 USD）" });
+  for (const f of pay) {
+    if (isRegisteredAddress(f.key) || f.key === ACCOUNT_TYPE_KEY) continue;
+    spec.push({ key: f.key, desc: f.label.replace(/\s+/g, " ").trim() });
+  }
+  if (pay.some((f) => isRegisteredAddress(f.key))) {
+    spec.push({ key: "addrStreet", desc: "收款人地址-街道/详细地址" });
+    spec.push({ key: "addrCity", desc: "收款人地址-城市" });
+    spec.push({ key: "addrProvince", desc: "收款人地址-省/州" });
+  }
+  return spec;
+}
+
+// Pick a built-in template id from the AI's language/method/bank-format hint.
+function chooseTemplateId(det: TemplateHint, templates: Template[]): string | undefined {
+  const find = (pred: (t: Template) => boolean) => templates.find(pred)?.id;
+  if (det.lang === "ja") return find((t) => t.lang === "ja") ?? templates[0]?.id;
+  if (det.lang === "ko") return find((t) => t.lang === "ko") ?? templates[0]?.id;
+  // English
+  if (det.method === "paypal")
+    return (
+      find((t) => t.lang === "en" && t.payment === "paypal" && !/prepay/i.test(t.fileName)) ??
+      find((t) => t.lang === "en" && t.payment === "paypal")
+    );
+  if (det.method === "payoneer") return find((t) => t.lang === "en" && t.payment === "payoneer");
+  // bank: iban vs swift
+  const bank = templates.filter((t) => t.lang === "en" && t.payment === "bank");
+  const iban = bank.find((t) => /iban/i.test(t.fileName));
+  const swift = bank.find((t) => /swift/i.test(t.fileName));
+  return (det.bankFormat === "iban" ? iban : swift)?.id ?? swift?.id ?? bank[0]?.id;
+}
 
 // Has this record been filled at all? (controls whether the detail form shows)
 function recordHasData(r: Record_): boolean {
@@ -69,6 +121,7 @@ export function RecordDetail({
   const [aiBusy, setAiBusy] = useState(false);
   const [rawPaste, setRawPaste] = useState("");
   const [parseMissing, setParseMissing] = useState<{ key: string; question: string }[] | null>(null);
+  const [showTplOverride, setShowTplOverride] = useState(false);
   // The detail form below ① stays hidden until smart-fill runs (or the user opts
   // into manual entry), so empty fields don't read as "go type these yourself".
   const [revealed, setRevealed] = useState(() => recordHasData(record));
@@ -130,34 +183,9 @@ export function RecordDetail({
   const hasBankAddress = paymentFields.some((f) => isRegisteredAddress(f.key));
   const hasAccountType = paymentFields.some((f) => f.key === ACCOUNT_TYPE_KEY);
 
-  // Field list handed to the AI extractor for "smart paste".
-  function buildParseSpec(): ParseSpecItem[] {
-    const spec: ParseSpecItem[] = [
-      { key: "legalName", desc: "法人姓名 / 签约人全名" },
-      { key: "socialAccount", desc: "社媒账号或主页链接（TikTok/Instagram/YouTube/Telegram，可与 kolLink 相同）" },
-      { key: "kolLink", desc: "发布频道/主页链接（只给一个链接时与 socialAccount 填一样即可）" },
-      { key: "platform", desc: "发布平台（可从链接推断，如 instagram.com→Instagram）" },
-      { key: "unitPrice", desc: "单价（每条视频价格，带币种，如 USD 500）" },
-      { key: "videoCount", desc: "合作视频数量（数字）" },
-      { key: "kolCountry", desc: "收款账户所在国家/地区（用于制裁/地区检查）" },
-      { key: "email", desc: "邮箱（如有）" },
-      { key: "accountBlock", desc: "收款用本人账户还是亲友/第三方账户：own 或 third" },
-    ];
-    if (hasAccountType) spec.push({ key: "currency", desc: "银行账户币种 Account Type（如 USD）" });
-    for (const f of paymentFields) {
-      if (isRegisteredAddress(f.key) || f.key === ACCOUNT_TYPE_KEY) continue;
-      spec.push({ key: f.key, desc: f.label.replace(/\s+/g, " ").trim() });
-    }
-    if (hasBankAddress) {
-      spec.push({ key: "addrStreet", desc: "收款人地址-街道/详细地址" });
-      spec.push({ key: "addrCity", desc: "收款人地址-城市" });
-      spec.push({ key: "addrProvince", desc: "收款人地址-省/州" });
-    }
-    return spec;
-  }
-
-  // Merge AI-extracted values into the record.
-  function applyParsed(values: Record<string, string>) {
+  // Merge AI-extracted values into the record (optionally with extra patch:
+  // template/lang chosen by the auto-detection).
+  function applyParsed(values: Record<string, string>, extra: Partial<Record_> = {}) {
     const next: ContractFields = {
       ...record.fields,
       kol: { ...record.fields.kol },
@@ -172,7 +200,25 @@ export function RecordDetail({
       else next.payment[k] = v; // payment label key
     }
     if (!kolName.trim() && next.kol.legalName) kolName = next.kol.legalName;
-    onChange({ fields: next, kolName });
+    onChange({ fields: next, kolName, ...extra });
+  }
+
+  // The full smart-fill flow: AI picks the template (language + payment method),
+  // then AI extracts the fields into it. No manual template selection needed.
+  async function smartFill() {
+    const det = await detectTemplate(rawPaste);
+    const tplId = chooseTemplateId(det, templates) ?? record.templateId;
+    let pf = fields;
+    if (tplId && tplId !== record.templateId) {
+      const b = await getTemplateBytes(tplId);
+      pf = detectFields(b);
+      setBytes(b);
+      setFields(pf);
+    }
+    const res = await parseContractInfo(rawPaste, specFromFields(pf));
+    applyParsed(res.values, { templateId: tplId, lang: det.lang });
+    setParseMissing(res.missing);
+    setRevealed(true);
   }
 
   const method =
@@ -271,7 +317,7 @@ export function RecordDetail({
       {error && <div className="error">{error}</div>}
 
       <div className="card">
-        <h3>基本信息（先选产品和模板）</h3>
+        <h3>基本信息</h3>
         <div className="grid2">
           <label>
             产品
@@ -287,28 +333,40 @@ export function RecordDetail({
               ))}
             </select>
           </label>
-          <label>
-            合同模板
-            <select
-              value={record.templateId}
-              onChange={(e) => {
-                const t = templates.find((x) => x.id === e.target.value);
-                onChange({ templateId: e.target.value, lang: t?.lang ?? record.lang });
-              }}
-            >
-              <option value="">（请选择模板）</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                  {t.builtin ? "" : "（上传）"}
-                </option>
-              ))}
-            </select>
-          </label>
           <div className="readout">
-            语言：{LANG_LABEL[template?.lang ?? record.lang]}
+            合同模板：
+            {template ? (
+              <strong>
+                {template.name}（{LANG_LABEL[template.lang]}）
+              </strong>
+            ) : (
+              <span className="muted">粘贴信息后由 AI 自动选择</span>
+            )}
             {loadingTpl && <span className="muted"> · 载入中…</span>}
+            <button className="link" onClick={() => setShowTplOverride((v) => !v)}>
+              {showTplOverride ? "收起" : "手动更换"}
+            </button>
           </div>
+          {showTplOverride && (
+            <label>
+              手动指定模板
+              <select
+                value={record.templateId}
+                onChange={(e) => {
+                  const t = templates.find((x) => x.id === e.target.value);
+                  onChange({ templateId: e.target.value, lang: t?.lang ?? record.lang });
+                }}
+              >
+                <option value="">（自动）</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.builtin ? "" : "（上传）"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
         {products.length === 0 && (
           <p className="warn">还没有产品，请先到「产品」页添加（如 Rythmix）。</p>
@@ -320,6 +378,7 @@ export function RecordDetail({
         <p className="hint">
           把红人给的所有信息（姓名、链接、单价、银行/PayPal 收款信息…）一股脑粘贴进来，AI 自动识别并填到下面对应栏位；缺失或对不上的会列出来问你。
         </p>
+        <p className="hint">AI 会先按收款方式和国家自动选模板（日本→日文、韩国→韩文、其余→英文），再识别填充。</p>
         <textarea
           rows={5}
           placeholder={"例如：\nJohn Doe, youtube.com/@john, 3 videos, USD 500 each\nBank of America, IBAN DE89..., SWIFT BOFAUS3N, account holder John Doe, New York USA"}
@@ -328,22 +387,14 @@ export function RecordDetail({
         />
         <button
           className="primary"
-          disabled={!!aiBusy || !rawPaste.trim() || !bytes}
-          onClick={() =>
-            runAi(async () => {
-              const res = await parseContractInfo(rawPaste, buildParseSpec());
-              applyParsed(res.values);
-              setParseMissing(res.missing);
-              setRevealed(true);
-            })
-          }
+          disabled={!!aiBusy || !rawPaste.trim()}
+          onClick={() => runAi(smartFill)}
         >
           {aiBusy ? "识别中…" : "AI 识别并自动填充"}
         </button>
         <button className="link" onClick={() => setRevealed((v) => !v)}>
           {revealed ? "收起下面的表单 ▲" : "或手动填写（不用 AI）▾"}
         </button>
-        {!bytes && <span className="muted"> （请先在上方选择模板）</span>}
 
         {parseMissing && (
           <div className="report">
