@@ -1,13 +1,13 @@
 {
   "name": "kol-feishu-bot",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "Feishu/Lark group bot that answers KOL business questions from knowledge.md via Qwen",
+  "description": "Feishu/Lark group bot (long-connection) that answers KOL business questions from knowledge.md via Qwen",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.21.2"
+    "@larksuiteoapi/node-sdk": "^1.68.0"
   }
 }
