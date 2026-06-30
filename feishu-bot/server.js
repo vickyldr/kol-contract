@@ -21,7 +21,7 @@ const {
   // 用 Claude 中转（OpenAI 兼容格式，国内常见）：填中转的完整 chat/completions 地址 + key + 模型名。
   RELAY_URL, // 例：https://你的中转域名/v1/chat/completions
   RELAY_KEY,
-  RELAY_MODEL = "claude-3-5-sonnet-20241022",
+  RELAY_MODEL = "claude-sonnet-4-6",
   // 或 Anthropic 原生接口（/v1/messages，x-api-key）。多数国内中转用上面的 RELAY_*，不用这个。
   ANTHROPIC_KEY,
   ANTHROPIC_BASE = "https://api.anthropic.com",
