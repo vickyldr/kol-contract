@@ -80,6 +80,39 @@ function chooseTemplateId(det: TemplateHint, templates: Template[]): string | un
   return (det.bankFormat === "iban" ? iban : swift)?.id ?? swift?.id ?? bank[0]?.id;
 }
 
+// Distinguish a plain email (name@maildomain, no path, no social domain) from a
+// social link/handle — by domain & path, NOT by the mere presence of "@".
+const SOCIAL_DOMAINS = /instagram|instagr\.am|tiktok|douyin|youtube|youtu\.be|t\.me|telegram|twitter|x\.com|facebook|fb\.com|snapchat|twitch|threads/i;
+function isEmailNotLink(s: string): boolean {
+  const v = s.trim();
+  if (SOCIAL_DOMAINS.test(v)) return false; // a social URL, even if it has @
+  if (v.startsWith("@")) return false; // a handle
+  if (v.includes("/")) return false; // has a path -> a link
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); // name@domain.tld
+}
+function looksUnsocialPlatform(s: string): boolean {
+  const v = s.trim();
+  if (SOCIAL_DOMAINS.test(v)) return false;
+  return v.includes("@") || /\.(com|net|org|io|co)\b/i.test(v);
+}
+
+// Deterministic guard: never let an email land in the link/platform fields.
+function sanitizeLinkFields(res: { values: Record<string, string>; missing: { key: string; question: string }[] }) {
+  const values = { ...res.values };
+  const missing = [...res.missing];
+  const drop = (key: string, question: string) => {
+    delete values[key];
+    if (!missing.some((m) => m.key === key)) missing.push({ key, question });
+  };
+  if (values.socialAccount && isEmailNotLink(values.socialAccount))
+    drop("socialAccount", "请提供红人的社媒账号或主页链接（之前那个像邮箱，不是链接）");
+  if (values.kolLink && isEmailNotLink(values.kolLink))
+    drop("kolLink", "请提供红人的发布频道/主页链接");
+  if (values.platform && (isEmailNotLink(values.platform) || looksUnsocialPlatform(values.platform)))
+    drop("platform", "请确认红人的发布平台（如 Instagram / YouTube / TikTok）");
+  return { values, missing };
+}
+
 // Has this record been filled at all? (controls whether the detail form shows)
 function recordHasData(r: Record_): boolean {
   const f = r.fields;
@@ -216,8 +249,9 @@ export function RecordDetail({
       setFields(pf);
     }
     const res = await parseContractInfo(rawPaste, specFromFields(pf));
-    applyParsed(res.values, { templateId: tplId, lang: det.lang });
-    setParseMissing(res.missing);
+    const clean = sanitizeLinkFields(res);
+    applyParsed(clean.values, { templateId: tplId, lang: det.lang });
+    setParseMissing(clean.missing);
     setRevealed(true);
   }
 
