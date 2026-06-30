@@ -1,0 +1,58 @@
+[
+  {
+    "file": "ja-framework.docx",
+    "name": "日文框架合同",
+    "lang": "ja",
+    "payment": "",
+    "original": "#U3010#U5c0f#U5f71-#U5408#U540c#U6a21#U677f#U3011Cooperation Contract#Uff08#U6846#U67b6#U534f#U8bae#Uff09#U65e5#U6587.docx"
+  },
+  {
+    "file": "ko-framework.docx",
+    "name": "韩文框架合同",
+    "lang": "ko",
+    "payment": "",
+    "original": "#U3010#U5c0f#U5f71-#U5408#U540c#U6a21#U677f#U3011Cooperation Contract#Uff08#U6846#U67b6#U534f#U8bae#Uff09#U97e9#U6587.docx"
+  },
+  {
+    "file": "en-bank-iban.docx",
+    "name": "英文-bank(IBAN)",
+    "lang": "en",
+    "payment": "bank",
+    "original": "Cooperation Contract-bank-IBAN-trsppt.docx"
+  },
+  {
+    "file": "en-bank-jp.docx",
+    "name": "英文-bank(JP)",
+    "lang": "en",
+    "payment": "bank",
+    "original": "Cooperation Contract-bank-JP.docx"
+  },
+  {
+    "file": "en-bank-swift.docx",
+    "name": "英文-bank(SWIFT)",
+    "lang": "en",
+    "payment": "bank",
+    "original": "Cooperation Contract-bank-swift-krtwhkus.docx"
+  },
+  {
+    "file": "en-paypal-prepay.docx",
+    "name": "英文-paypal(预付)",
+    "lang": "en",
+    "payment": "paypal",
+    "original": "Cooperation Contract-paypal-prepay.docx"
+  },
+  {
+    "file": "en-paypal.docx",
+    "name": "英文-paypal",
+    "lang": "en",
+    "payment": "paypal",
+    "original": "Cooperation Contract-paypal.docx"
+  },
+  {
+    "file": "en-payoneer.docx",
+    "name": "英文-payoneer",
+    "lang": "en",
+    "payment": "payoneer",
+    "original": "Cooperation Contract-payponeer.docx"
+  }
+]
