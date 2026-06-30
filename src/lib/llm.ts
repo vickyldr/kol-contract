@@ -204,6 +204,7 @@ export async function parseContractInfo(
     "   SWIFT Code / BIC / SWIFTコード → swift 这类 key；银行名 / 銀行名稱(如 中國信託) → bank name；",
     "   收款人地址 / 住所 → 拆开填到 Address(街道门牌)、City(城市)、Province/State(省/州) 三个 key；PayPal 邮箱 → paypal account email 这类 key。",
     "   地址不要重复：城市只填到 City，【不要】再把城市重复进 Address 或 Province；能拆就拆，拆不开就只填 Address、其余留空，绝不在多个字段里塞同样的内容。",
+    "   邮箱分清用途：红人【接收合同/联系】的邮箱（如“接收合約的 Email”“联系邮箱”）→ email；【PayPal 收款】邮箱 → paypal account email 这类 key。两者可能不同，别混。",
     "4) 只识别【实际填了值】的那种收款方式（红人常写“擇一提供/二选一”）；若某种方式只有空标题（如只写了“PayPal 名稱：”后面没内容），就【完全忽略】它——不要去找它的字段，也【绝对不要】把它列进 missing。",
     "4b) missing 里只能出现【上面字段清单里的 key】。清单里没有的东西一律不要报缺失（例如本次是银行收款、清单里根本没有 PayPal 字段时，绝不要追问 PayPal）。",
     "5) PayPal/Payoneer 收款：收款人姓名→账户名义人类 key、收款邮箱→账号/邮箱类 key；不要追问 IBAN/SWIFT/银行名等银行字段，也不要追问 kolCountry。仅银行收款才追问银行字段。",
