@@ -8,23 +8,6 @@ import { extractHandle } from "../lib/util";
 const kolHandle = (r: Record_): string =>
   extractHandle(r.fields.kol.socialAccount, r.fields.kol.kolLink);
 
-// Pull the KOL id / handle from the social account or link, e.g.
-// "instagram.com/@johndoe" / "instagram.com/johndoe/" / "@johndoe" -> "@johndoe".
-function kolHandle(r: Record_): string {
-  const src = (r.fields.kol.socialAccount || r.fields.kol.kolLink || "").trim();
-  if (!src) return "";
-  const at = src.match(/@([A-Za-z0-9._]+)/);
-  if (at) return "@" + at[1];
-  const seg = src
-    .replace(/^https?:\/\//i, "")
-    .replace(/[?#].*$/, "")
-    .split("/")
-    .filter(Boolean);
-  // last path segment after the domain
-  if (seg.length >= 2) return "@" + seg[seg.length - 1];
-  return "";
-}
-
 export function Records() {
   const [records, setRecords] = useState<Record_[]>(loadRecords());
   const [products, setProducts] = useState<Product[]>(loadProducts());

@@ -239,8 +239,14 @@ export function RecordDetail({
       setBytes(b);
       setFields(pf);
     }
-    const res = await parseContractInfo(rawPaste, specFromFields(pf));
+    const spec = specFromFields(pf);
+    const res = await parseContractInfo(rawPaste, spec);
     const clean = sanitizeLinkFields(res);
+    // Only keep "missing" prompts for fields this template actually has — e.g.
+    // a bank template must not ask for PayPal fields just because the pasted
+    // text had an (empty) PayPal section.
+    const specKeys = new Set(spec.map((s) => s.key));
+    clean.missing = clean.missing.filter((m) => specKeys.has(m.key));
     applyParsed(clean.values, { templateId: tplId, lang: det.lang });
     setParseMissing(clean.missing);
     setRevealed(true);
