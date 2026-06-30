@@ -394,7 +394,61 @@ export function fillContract(
     report.filledLabels.push(a);
   }
 
+  // 4) Party B signature name = legal name (both signature blocks). Anchored on
+  // the sibling "Party A ... Quvideo" cell so we don't touch body "Party B ..."
+  fillPartyBName(dom, input.kol.legalName ?? "");
+
   return { out: serializeDoc(doc), report };
+}
+
+// Append the legal name to the Party B signature cell(s). A signature row is a
+// 2-cell row whose first cell is the signed Party A (contains "Quvideo") and
+// whose second cell is just the "Party B" label.
+function fillPartyBName(dom: Document, name: string): void {
+  if (!name.trim()) return;
+  const isPartyA = (t: string) => /party\s*a|甲方|갑/i.test(t) && /quvideo/i.test(t);
+  const isPartyBLabel = (t: string) => /^(party\s*b|乙方|을)\s*[:：]?\s*$/i.test(t.trim());
+
+  const appendName = (container: Element) => {
+    const p = container.getElementsByTagNameNS(W_NS, "p")[0] ?? container;
+    const srcRun = container.getElementsByTagNameNS(W_NS, "r")[0];
+    const run = srcRun
+      ? makeRun(dom, srcRun, " " + name, false)
+      : (() => {
+          const r = dom.createElementNS(W_NS, "w:r");
+          const t = dom.createElementNS(W_NS, "w:t");
+          t.setAttributeNS(XML_NS, "xml:space", "preserve");
+          t.textContent = " " + name;
+          r.appendChild(t);
+          return r;
+        })();
+    p.appendChild(run);
+  };
+
+  // a) table signature blocks: 2-cell row with Party A (Quvideo) + Party B label
+  for (const tr of Array.from(dom.getElementsByTagNameNS(W_NS, "tr"))) {
+    const cells = childTags(tr, "tc");
+    if (cells.length !== 2) continue;
+    if (isPartyA(cellText(cells[0])) && isPartyBLabel(cellText(cells[1]))) appendName(cells[1]);
+  }
+
+  // b) paragraph signature blocks: a paragraph that is exactly "Party B:" with a
+  // colon (the body uses "Party B shall…"; the info header is "PARTY B" no colon)
+  const insideCell = (el: Element): boolean => {
+    let n: Node | null = el.parentNode;
+    while (n) {
+      if (isElement(n) && n.namespaceURI === W_NS && n.localName === "tc") return true;
+      n = n.parentNode;
+    }
+    return false;
+  };
+  for (const p of paragraphs(dom)) {
+    if (insideCell(p)) continue; // already handled by tables
+    const t = Array.from(p.getElementsByTagNameNS(W_NS, "t"))
+      .map((n) => n.textContent ?? "")
+      .join("");
+    if (/^(party\s*b|乙方|을)\s*[:：]\s*$/i.test(t.trim())) appendName(p);
+  }
 }
 
 // Put `value` into the value cell, mirroring the label cell's run formatting.
