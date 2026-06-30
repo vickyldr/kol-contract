@@ -2,9 +2,10 @@ import { useState } from "react";
 import {
   DEFAULT_ANTHROPIC_MODEL,
   DEFAULT_QWEN_MODEL,
-  getApiKey,
+  builtinApiKey,
   getModel,
   getProvider,
+  getStoredApiKey,
   setApiKey,
   setModel,
   setProvider,
@@ -13,13 +14,15 @@ import {
 
 export function Settings() {
   const [provider, setProv] = useState<Provider>(getProvider());
-  const [key, setKey] = useState(getApiKey(provider));
+  const [key, setKey] = useState(getStoredApiKey(provider));
   const [model, setModelState] = useState(getModel(provider));
   const [saved, setSaved] = useState(false);
 
+  const hasBuiltin = !!builtinApiKey(provider);
+
   function switchProvider(p: Provider) {
     setProv(p);
-    setKey(getApiKey(p));
+    setKey(getStoredApiKey(p));
     setModelState(getModel(p));
     setSaved(false);
   }
@@ -67,13 +70,16 @@ export function Settings() {
           <p className="hint">Claude 使用 {DEFAULT_ANTHROPIC_MODEL}，质量更高、价格更贵。</p>
         )}
 
+        {hasBuiltin && (
+          <p className="ok">✓ 已内置默认 Key（管理员配置），同学无需填写即可使用。下方留空即用默认；填了则用你自己的。</p>
+        )}
         <label>
-          API Key（{provider === "qwen" ? "通义千问 / 阿里云百炼" : "Anthropic"}）
+          API Key（{provider === "qwen" ? "通义千问 / 阿里云百炼" : "Anthropic"}）{hasBuiltin ? "（可留空）" : ""}
           <input
             type="password"
             value={key}
             onChange={(e) => setKey(e.target.value)}
-            placeholder={provider === "qwen" ? "sk-..." : "sk-ant-..."}
+            placeholder={hasBuiltin ? "已内置默认 Key，可留空" : provider === "qwen" ? "sk-..." : "sk-ant-..."}
           />
         </label>
         <label>

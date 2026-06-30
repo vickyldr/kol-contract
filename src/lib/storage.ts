@@ -78,8 +78,22 @@ export const getProvider = (): Provider =>
   (localStorage.getItem(PROVIDER_KEY) as Provider) || "qwen";
 export const setProvider = (p: Provider): void => localStorage.setItem(PROVIDER_KEY, p);
 
-export function getApiKey(provider: Provider = getProvider()): string {
+// A key baked in at build time via Vercel env vars (VITE_QWEN_KEY /
+// VITE_ANTHROPIC_KEY). Lets an admin preconfigure a shared key so teammates
+// don't have to enter one. NOTE: this ships in the browser bundle and is
+// visible to anyone who can open the site — use only for internal tools, and
+// set a spending cap on the key.
+export function builtinApiKey(provider: Provider = getProvider()): string {
+  const env = import.meta.env;
+  return (provider === "qwen" ? env.VITE_QWEN_KEY : env.VITE_ANTHROPIC_KEY) ?? "";
+}
+// Only the key the user typed locally (used to prefill the Settings input).
+export function getStoredApiKey(provider: Provider = getProvider()): string {
   return localStorage.getItem(provider === "qwen" ? QWEN_KEY : ANTHROPIC_KEY) ?? "";
+}
+// The key actually used for requests: user's own key wins, else the built-in.
+export function getApiKey(provider: Provider = getProvider()): string {
+  return getStoredApiKey(provider) || builtinApiKey(provider);
 }
 export function setApiKey(provider: Provider, k: string): void {
   localStorage.setItem(provider === "qwen" ? QWEN_KEY : ANTHROPIC_KEY, k);
