@@ -9,6 +9,8 @@ export type Level = "error" | "warn" | "info";
 export interface Check {
   level: Level;
   text: string;
+  // optional file (under public/) the teammate can download from this reminder
+  download?: { label: string; file: string };
 }
 
 export interface CheckContext {
@@ -265,7 +267,8 @@ export function runChecks(ctx: CheckContext): Check[] {
       level: "warn",
       text:
         `${lead}建议先问红人求证，并建议改用对私账户（更快更方便）。若红人坚持用对公账号，请对方提供：①公司资质证明 ②发票。` +
-        `我方需提供开票信息与发票模板 —— 公司信息：${COMPANY_INFO}；发票模板用 ${invoiceTpl}（银行→invoice-Quvideo.xlsx，PayPal/Payoneer→invoice-Ocean Look.xlsx）。`,
+        `我方需提供开票信息与发票模板 —— 公司信息：${COMPANY_INFO}；本次为 ${method || "（未指定）"} 支付，请用 ${invoiceTpl}（银行→invoice-Quvideo.xlsx，PayPal/Payoneer→invoice-Ocean Look.xlsx）。`,
+      download: { label: `下载发票模板 ${invoiceTpl}`, file: `invoices/${invoiceTpl}` },
     });
   }
 

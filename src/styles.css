@@ -524,6 +524,18 @@ button:disabled {
   background: #eef2f7;
   color: #4a5160;
 }
+.chk-dl {
+  display: inline-block;
+  margin-left: 8px;
+  margin-top: 4px;
+  padding: 3px 10px;
+  background: #fff;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
 
 .foot {
   text-align: center;

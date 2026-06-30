@@ -473,7 +473,18 @@ export function RecordDetail({
                 <span className="chk-ico">
                   {c.level === "error" ? "⛔" : c.level === "warn" ? "⚠️" : "ℹ️"}
                 </span>
-                {c.text}
+                <span>
+                  {c.text}
+                  {c.download && (
+                    <a
+                      className="chk-dl"
+                      href={`${import.meta.env.BASE_URL}${c.download.file.split("/").map(encodeURIComponent).join("/")}`}
+                      download
+                    >
+                      ⬇ {c.download.label}
+                    </a>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
