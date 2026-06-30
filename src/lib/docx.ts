@@ -275,6 +275,8 @@ export interface FillInput {
   method?: string; // bank | paypal | payoneer (for the in-body marker)
   unitPrice?: string;
   videoCount?: string;
+  // which Party B account block to fill (own = first, third = second occurrence)
+  accountBlock?: "own" | "third";
   kol: Partial<Record<KolField, string>>;
   // payment values keyed by normalized label (matches detectFields key)
   payment: Record<string, string>;
@@ -318,8 +320,10 @@ export function fillContract(
   report.priceFilled = fillBracketAfter(dom, PRICE_ANCHORS, input.unitPrice ?? "");
   report.countFilled = fillBracketAfter(dom, COUNT_ANCHORS, input.videoCount ?? "");
 
-  // 3) label → value cells (first empty match per label)
-  const filled = new Set<string>();
+  // 3) label → value cells. KOL fields fill the first empty match; payment
+  // fields fill the chosen account block (own = 1st occurrence, third = 2nd).
+  const seen = new Map<string, number>();
+  const targetIdx = input.accountBlock === "third" ? 1 : 0;
   for (const tr of Array.from(dom.getElementsByTagNameNS(W_NS, "tr"))) {
     const cells = childTags(tr, "tc");
     if (cells.length !== 2) continue;
@@ -327,14 +331,19 @@ export function fillContract(
     const b = cellText(cells[1]);
     if (!a || b || a.includes("【")) continue;
     const na = normalizeLabel(a);
-    if (filled.has(na)) continue;
     const field = matchKolField(na);
-    let value: string | undefined;
-    if (field) value = input.kol[field];
-    else if (isPaymentLabel(a, na)) value = input.payment[na];
+    const isPayment = !field && isPaymentLabel(a, na);
+    if (!field && !isPayment) continue;
+
+    const idx = seen.get(na) ?? 0;
+    seen.set(na, idx + 1);
+
+    const value = field ? input.kol[field] : input.payment[na];
     if (!value) continue;
+    if (field && idx !== 0) continue; // KOL field: first occurrence only
+    if (isPayment && idx !== targetIdx) continue; // payment: chosen block only
+
     fillCell(dom, cells[1], cells[0], value);
-    filled.add(na);
     report.filledLabels.push(a);
   }
 

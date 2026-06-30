@@ -6,7 +6,7 @@ import {
   extractText,
   type EditResult,
 } from "../lib/docx";
-import { messageForKOL, proposeEdits, summarizeForTL } from "../lib/claude";
+import { messageForKOL, proposeEdits, summarizeForTL } from "../lib/llm";
 import { genId } from "../lib/storage";
 import {
   LANG_LABEL,

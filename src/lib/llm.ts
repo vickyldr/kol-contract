@@ -1,53 +1,68 @@
-// Browser-direct Claude API client. The key is provided by the user in Settings
-// and stored locally; requests go straight to api.anthropic.com using the
-// direct-browser-access header (no backend involved).
+// Browser-direct LLM client supporting Qwen (Alibaba DashScope, OpenAI-compatible
+// endpoint) and Anthropic (Claude). The key is provided by the user in Settings
+// and stored locally; requests go straight to the provider — no backend.
+//
+// Qwen uses the international endpoint, which returns CORS headers, so direct
+// browser calls work. qwen-flash is the cheap default and is plenty for the
+// translation / summarization / find-replace tasks here.
 
-import { getApiKey, getModel } from "./storage";
+import { getApiKey, getModel, getProvider } from "./storage";
 import type { ContractEdit, Lang } from "./types";
 import { LANG_LABEL } from "./types";
 
-const API_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const QWEN_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
 
-async function callClaude(system: string, user: string, maxTokens = 2000): Promise<string> {
-  const key = getApiKey();
-  if (!key) throw new Error("尚未设置 Anthropic API Key，请在「设置」中填写。");
+async function callLLM(system: string, user: string, maxTokens = 2000): Promise<string> {
+  const provider = getProvider();
+  const key = getApiKey(provider);
+  const model = getModel(provider);
+  if (!key) throw new Error("尚未设置 API Key，请在「设置」中填写。");
 
-  const res = await fetch(API_URL, {
+  if (provider === "anthropic") {
+    const res = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] }),
+    });
+    if (!res.ok) throw new Error(`Claude 请求失败 (${res.status})：${(await res.text()).slice(0, 300)}`);
+    const json = await res.json();
+    return ((json.content ?? []) as { type: string; text?: string }[])
+      .filter((p) => p.type === "text")
+      .map((p) => p.text ?? "")
+      .join("")
+      .trim();
+  }
+
+  // Qwen (OpenAI-compatible)
+  const res = await fetch(QWEN_URL, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
+    headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
     body: JSON.stringify({
-      model: getModel(),
+      model,
       max_tokens: maxTokens,
-      system,
-      messages: [{ role: "user", content: user }],
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
     }),
   });
-
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`Claude API 请求失败 (${res.status})：${txt.slice(0, 300)}`);
-  }
+  if (!res.ok) throw new Error(`Qwen 请求失败 (${res.status})：${(await res.text()).slice(0, 300)}`);
   const json = await res.json();
-  const parts = (json.content ?? []) as Array<{ type: string; text?: string }>;
-  return parts
-    .filter((p) => p.type === "text")
-    .map((p) => p.text ?? "")
-    .join("")
-    .trim();
+  return (json.choices?.[0]?.message?.content ?? "").trim();
 }
 
-// Pull the first JSON object/array out of a model response, tolerating ```json fences.
+// Pull the first JSON array/object out of a model response, tolerating fences.
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const body = fenced ? fenced[1] : text;
   const start = body.search(/[[{]/);
   if (start === -1) throw new Error("模型未返回 JSON。");
-  // find matching end by scanning from the last } or ]
   const end = Math.max(body.lastIndexOf("}"), body.lastIndexOf("]"));
   return JSON.parse(body.slice(start, end + 1));
 }
@@ -65,7 +80,7 @@ export async function summarizeForTL(kolOriginal: string, lang: Lang): Promise<s
     "直接输出整理结果，不要寒暄。",
   ].join("\n");
   const user = `红人原话（${LANG_LABEL[lang]}）：\n"""\n${kolOriginal}\n"""`;
-  return callClaude(system, user);
+  return callLLM(system, user);
 }
 
 // Step 3: TL's decision -> message in the KOL's language to paste back to KOL.
@@ -86,7 +101,7 @@ export async function messageForKOL(
     "直接输出可发送给红人的消息正文。",
   ].join("\n");
   const user = `红人原诉求：\n"""\n${kolOriginal}\n"""\n\nTL 的内部判断：\n"""\n${tlReply}\n"""`;
-  return callClaude(system, user);
+  return callLLM(system, user);
 }
 
 // Step 5: produce minimal-change find/replace edits for the contract.
@@ -115,7 +130,7 @@ export async function proposeEdits(
     "【TL 判断】",
     tlReply,
   ].join("\n");
-  const raw = await callClaude(system, user, 3000);
+  const raw = await callLLM(system, user, 3000);
   const parsed = extractJson(raw);
   if (!Array.isArray(parsed)) throw new Error("模型未返回修改列表。");
   return parsed

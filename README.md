@@ -23,6 +23,8 @@ npm run preview  # 预览构建结果
 2. **合同记录 → 新建记录**：
    - 填红人姓名、选产品、选模板（语言自动识别）。
    - 填红人合同信息：法人姓名、社媒账号、KOL 链接、发布平台、单价、合作视频数量；付款字段会**根据所选模板自动出现**（如 bank 模板出现 IBAN / SWIFT / Bank Name，paypal 模板出现 Paypal Name / Email）。
+   - 付款信息可选「**本人账户 own account / 第三方账户 third-party**」，自动填入对应的账户栏。
+   - 银行模板的注册地址会拆成**街道 / 城市 / 省州**三格填写，自动合并进 Registered Address。
    - 点「一键生成并下载合同」。
 3. **合同修改**（红人有修改意见时，在记录里「新建修改轮次」）：
    - 第 1 步：粘贴红人原话 → AI 翻译并按「一点一点」整理成中文，复制给 TL。
@@ -38,9 +40,18 @@ npm run preview  # 预览构建结果
 
 填充原理：表格里「标签单元格有文字、相邻单元格为空」的行被识别为可填字段；只填空位、不动甲方（Party A）已有内容；单价 / 视频数量按 `【 】` 锚点填；产品名与支付方式按正文标记替换。
 
-## 设置
+## 产品
 
-到「设置」填入 Anthropic API Key 与模型（默认 `claude-opus-4-8`）。Key 仅存在本浏览器，请求带 `anthropic-dangerous-direct-browser-access` 头直连 Anthropic。
+内置默认产品：Rythmix、VivaVideo、AICatch、VivaCut、WiseMeal、Recco、Inspo、AIFlow、Rymo，可在「产品」页自行增删改。产品名会替换合同正文里的 `【Rythmix】`。
+
+## 设置（AI 服务商）
+
+「合同修改」的翻译 / 总结 / 改约支持两家：
+
+- **通义千问 Qwen（推荐，便宜）**：默认 `qwen-flash`，约 $0.05 / 百万输入 token、$0.40 / 百万输出，一次改约（3 次调用）通常不到 1 分钱。Key 在阿里云百炼（Model Studio）控制台获取；用国际站 `dashscope-intl` 直连，浏览器可直接调用（带 CORS）。
+- **Claude（Anthropic）**：默认 `claude-opus-4-8`，质量更高、更贵。
+
+Key 仅存在本浏览器，请求直连服务商，不经过任何中间服务器。
 
 ## 技术栈
 

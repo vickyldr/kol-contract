@@ -485,6 +485,14 @@ button:disabled {
   border-color: #d7def0;
   background: #fbfcff;
 }
+.field-block {
+  margin-bottom: 12px;
+}
+.field-label {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
 
 .foot {
   text-align: center;

@@ -8,8 +8,8 @@ import {
   type FillInput,
 } from "../lib/docx";
 import { getTemplateBytes } from "../lib/templates";
-import { KOL_FIELD_LABEL_CN, type KolField } from "../lib/labels";
-import type { ContractFields, Product, Record_, Template } from "../lib/types";
+import { KOL_FIELD_LABEL_CN, isRegisteredAddress, type KolField } from "../lib/labels";
+import type { AccountBlock, ContractFields, Product, Record_, Template } from "../lib/types";
 import { LANG_LABEL } from "../lib/types";
 import { ModificationPanel } from "./ModificationPanel";
 
@@ -75,6 +75,7 @@ export function RecordDetail({
   }
 
   const paymentFields = fields.filter((f) => f.kind === "payment");
+  const hasBankAddress = paymentFields.some((f) => isRegisteredAddress(f.key));
 
   const buildFillInput = useCallback((): FillInput => {
     const method =
@@ -84,13 +85,25 @@ export function RecordDetail({
         : paymentFields.some((f) => /payponeer|payoneer/i.test(f.label))
           ? "payoneer"
           : "bank");
+
+    // assemble the split bank address into the registered-address label value
+    const payment = { ...record.fields.payment };
+    const addr = [record.fields.addrStreet, record.fields.addrCity, record.fields.addrProvince]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(", ");
+    for (const f of paymentFields) {
+      if (isRegisteredAddress(f.key)) payment[f.key] = addr;
+    }
+
     return {
       productName: product?.contractName,
       method,
       unitPrice: record.fields.unitPrice,
       videoCount: record.fields.videoCount,
+      accountBlock: record.fields.accountBlock,
       kol: record.fields.kol,
-      payment: record.fields.payment,
+      payment,
     };
   }, [template, product, paymentFields, record.fields]);
 
@@ -234,20 +247,67 @@ export function RecordDetail({
       <div className="card">
         <h3>付款信息</h3>
         <p className="hint">以下字段根据所选模板自动识别（{template?.payment || "未指定"}）。只填你有的即可。</p>
+
+        <div className="field-block">
+          <div className="field-label">填入哪个账户栏？</div>
+          <div className="seg">
+            {(["own", "third"] as AccountBlock[]).map((b) => (
+              <button
+                key={b}
+                className={record.fields.accountBlock === b ? "seg-btn active" : "seg-btn"}
+                onClick={() => setFieldsObj({ accountBlock: b })}
+              >
+                {b === "own" ? "本人账户 own account" : "第三方账户 third-party"}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {paymentFields.length === 0 && !loadingTpl && (
           <p className="empty">该模板未识别到付款字段。</p>
         )}
         <div className="grid2">
-          {paymentFields.map((f) => (
-            <label key={f.key}>
-              {f.label}
-              <input
-                value={record.fields.payment[f.key] ?? ""}
-                onChange={(e) => setPayment(f.key, e.target.value)}
-              />
-            </label>
-          ))}
+          {paymentFields.map((f) =>
+            isRegisteredAddress(f.key) ? null : (
+              <label key={f.key}>
+                {f.label}
+                <input
+                  value={record.fields.payment[f.key] ?? ""}
+                  onChange={(e) => setPayment(f.key, e.target.value)}
+                />
+              </label>
+            ),
+          )}
         </div>
+
+        {hasBankAddress && (
+          <>
+            <h4>账户注册地址（自动拆解填入 Registered Address）</h4>
+            <div className="grid2">
+              <label>
+                街道 Street / Address
+                <input
+                  value={record.fields.addrStreet}
+                  onChange={(e) => setFieldsObj({ addrStreet: e.target.value })}
+                />
+              </label>
+              <label>
+                城市 City
+                <input
+                  value={record.fields.addrCity}
+                  onChange={(e) => setFieldsObj({ addrCity: e.target.value })}
+                />
+              </label>
+              <label>
+                省/州 Province / State
+                <input
+                  value={record.fields.addrProvince}
+                  onChange={(e) => setFieldsObj({ addrProvince: e.target.value })}
+                />
+              </label>
+            </div>
+          </>
+        )}
       </div>
 
       <button className="primary big" disabled={!bytes || loadingTpl} onClick={generate}>

@@ -41,7 +41,13 @@ export const KOL_FIELD_LABEL_CN: Record<KolField, string> = {
 
 // Payment labels that should be treated as fillable even though they don't end
 // in a colon.
-export const PAYMENT_LABEL_PREFIXES = ["account holder's registered address"];
+export const PAYMENT_LABEL_PREFIXES = ["account holder's registered address", "account type"];
+
+export const REGISTERED_ADDRESS_PREFIX = "account holder's registered address";
+
+export function isRegisteredAddress(normalizedKey: string): boolean {
+  return normalizedKey.startsWith(REGISTERED_ADDRESS_PREFIX);
+}
 
 // In-body product token replaced by the selected product name.
 export const PRODUCT_TOKEN = "【Rythmix】";

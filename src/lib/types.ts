@@ -40,17 +40,34 @@ export interface Template {
   createdAt: number;
 }
 
+export type AccountBlock = "own" | "third";
+
 // Autofill inputs, saved on the record so the filled contract is reproducible.
 export interface ContractFields {
   kol: Partial<Record<KolField, string>>;
   unitPrice: string;
   videoCount: string;
-  // payment values keyed by the template's normalized payment label
+  // which Party B account block to fill: own account vs. third-party account
+  accountBlock: AccountBlock;
+  // bank registered address, split per the template label (streets/cities/state)
+  addrStreet: string;
+  addrCity: string;
+  addrProvince: string;
+  // remaining payment values keyed by the template's normalized payment label
   payment: Record<string, string>;
 }
 
 export function emptyFields(): ContractFields {
-  return { kol: {}, unitPrice: "", videoCount: "", payment: {} };
+  return {
+    kol: {},
+    unitPrice: "",
+    videoCount: "",
+    accountBlock: "own",
+    addrStreet: "",
+    addrCity: "",
+    addrProvince: "",
+    payment: {},
+  };
 }
 
 // ---- modification workflow ----
