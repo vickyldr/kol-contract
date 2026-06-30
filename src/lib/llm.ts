@@ -166,10 +166,13 @@ export async function parseContractInfo(
     '{"values": {"<key>": "<抽取到的值>"}, "missing": [{"key":"<key>","question":"<用中文问同学的一句话>"}]}',
     "规则：",
     "1) 只抽取你能确定的值，绝不编造；不确定或找不到的字段放进 missing 并给出要追问的问题。",
-    "2) 金额带上币种（如 USD 500）。accountBlock 只能是 own 或 third（收款人姓名与签约人明显不一致时填 third）。",
-    "3) 银行账号原样保留；邮箱保持邮箱格式。地址按 街道/城市/省州 拆开到对应 key。",
-    "4) 值用原文语言/原始格式，不要翻译人名、账号、地址。",
-    "5) 信息不必完整：红人只给一个链接（哪怕只是一个 Instagram 链接）也行，socialAccount 与 kolLink 可填成同一个；platform 可从链接域名推断。",
+    "2) 金额带上币种（如 USD 500 / 6000 TWD）。accountBlock 只能是 own 或 third（收款人姓名与签约人明显不一致时填 third）。",
+    "3) 账号/邮箱原样保留；地址按 街道/城市/省州 拆开到对应 key。值用原文语言/原始格式，不要翻译人名、账号、地址。",
+    "4) 信息不必完整：红人只给一个链接（哪怕只是一个 Instagram 链接）也行，socialAccount 与 kolLink 可填成同一个；platform 从链接域名自动推断、不要追问。",
+    "5) 先从原文判断【收款方式】（出现 PayPal / Payoneer / 银行/Bank/IBAN 等字样）：",
+    "   · PayPal / Payoneer 收款：把收款人姓名填到“账户名义人 / account holder / 口座名義人 / 예금주 / Paypal Name / Payponeer Name”这类 key；把收款邮箱填到“账号 / account number / 口座番号 / 계좌번호 / Paypal Account Email / Payponeer Account Email”这类 key。【不要】追问 IBAN/SWIFT/银行名/银行地址等银行专有字段，也【不要】追问 kolCountry（收款账户所在国家）。",
+    "   · 仅【银行】收款时，才追问银行字段和 kolCountry。",
+    "6) missing 里的问题：主语一律是“红人”，不要用“你的”；社媒账号 / 主页链接 / 平台属于同一类，最多只合并问一条（例：“请提供红人的社媒账号或主页链接”）。问题尽量少、合并同类。",
     "只输出 JSON，不要任何解释。",
   ].join("\n");
   const fieldList = spec.map((s) => `- ${s.key}: ${s.desc}`).join("\n");
