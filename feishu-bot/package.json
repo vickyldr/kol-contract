@@ -5,9 +5,12 @@
   "type": "module",
   "description": "Feishu/Lark group bot (long-connection) that answers KOL business questions from knowledge.md via Qwen",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "sync": "node sync-feishu.mjs"
   },
   "dependencies": {
-    "@larksuiteoapi/node-sdk": "^1.68.0"
+    "@larksuiteoapi/node-sdk": "^1.68.0",
+    "dotenv": "^16.4.5",
+    "playwright": "^1.48.0"
   }
 }

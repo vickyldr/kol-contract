@@ -37,28 +37,32 @@ node server.js          # 或 pm2 start server.js --name kol-bot
 - 有人说「人工 / 转人工 / 找 TL」→ 回一句让其找 TL（`.env` 里可改 `HANDOFF_HINT`）。
 - 知识库没覆盖的，会说「不确定，建议找 TL」，不瞎编。
 
-## 让它实时读「你飞书里的文档」当知识库（推荐）
+## 让它实时读飞书文档，**不用维护第二份**（推荐）
 
-不想每次改 `knowledge.md`？可以让机器人**直接读你飞书里的文档**——你在飞书改 SOP，它下次回答就是最新的。
+核心思路：**只留一份正本**——你在公司飞书里照常改 SOP，机器人去读同一份，不存在"改两遍"。
 
-> ⚠️ **硬前提：文档必须和机器人在同一个飞书组织里。**
-> 飞书自建应用读不到「别的组织」的文档（跨组织 / user token 都不行），公司组织要开权限得管理员。
-> 所以做法是：**在你自己的个人飞书里建一份带教知识库**（你是管理员，随便开权限），把 SOP 整理进去，机器人读这份。
+### 方式一·推荐：文档是「公开互联网可见」的
 
-**步骤：**
+如果你的 SOP 文档已设成 **「互联网上获得链接的人可阅读」**（公开网页），那机器人可以像读普通网页一样直接读它——**不限组织、不需管理员、不需任何应用授权**。你只改公司那一份，机器人就同步。
 
-1. 在你**个人飞书**里建一个**知识库（Wiki）**或几篇云文档，把带教 SOP 写进去。
-2. 开放平台 → 你的应用 → **权限管理**，加：
-   - `docx:document:readonly`（读云文档内容）
-   - `wiki:wiki:readonly`（读知识库目录）
-   - 自己审批发布新版本。
-3. 打开那个知识库/文档 → **右上角分享 → 添加协作者 → 搜你的机器人应用名 → 给「可阅读」**。（不分享，应用看不到。）
-4. 拿到 ID 填进 `.env`：
-   - 知识库：链接 `…/wiki/space/【这串数字就是 space_id】` → `FEISHU_WIKI_SPACE_ID=...`
-   - 或单篇文档：链接 `…/docx/【这串就是 document_id】` → `FEISHU_DOC_TOKENS=id1,id2`
-5. 重启 `node server.js`，看到日志 `已从飞书拉取 N 篇文档` 就成了。默认每 5 分钟自动拉一次最新（`DOC_REFRESH_SECONDS` 可调）。
+```bash
+npm install
+npx playwright install chromium     # 装无头浏览器
+# .env 里填： PUBLIC_DOC_URLS=https://xxx.feishu.cn/docx/aaa,https://xxx.feishu.cn/wiki/bbb
+node sync-feishu.mjs                 # 或 pm2 start sync-feishu.mjs --name kol-sync
+```
 
-填了飞书文档后，机器人会**同时**用 `knowledge.md`（放工具用法等固定内容）+ 飞书文档（放你常改的 SOP）。两边都不填飞书时，就只用 `knowledge.md`。
+它每 5 分钟（`DOC_REFRESH_SECONDS` 可调）渲染这些公开链接、抓正文写进 `knowledge.feishu.md`，机器人 1 分钟内自动加载。**机器人和同步脚本各跑一个进程**（`pm2 start server.js` + `pm2 start sync-feishu.mjs`），同步崩了也不影响答疑。
+
+> 小贴士：把 SOP 里**几篇核心文档**的公开链接填进去即可，不用全填。文档结构变了也无所谓——抓不到正文容器会兜底抓整页可见文字。
+
+### 方式二：文档在你自己飞书里（同组织，应用授权读取）
+
+文档在**机器人所在的同一个飞书组织**（个人飞书，你是管理员）时可用 API 直读：① 应用开 `docx:document:readonly` + `wiki:wiki:readonly`；② 把文档/知识库分享给机器人应用（可阅读协作者）；③ `.env` 填 `FEISHU_WIKI_SPACE_ID` 或 `FEISHU_DOC_TOKENS`。重启看到 `已从飞书拉取 N 篇文档` 即成。
+
+> ⚠️ 跨组织读不了：个人飞书的机器人**读不到公司飞书**的文档（飞书硬规则）。公司文档要么走**方式一**（公开链接），要么找管理员把应用装进公司组织。
+
+不管哪种方式，机器人都会**同时**用 `knowledge.md`（手写的固定内容：工具用法、入职流程）+ 飞书文档（你常改的 SOP）。
 
 ## 切换 / 维护
 

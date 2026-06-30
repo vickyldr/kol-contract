@@ -3,6 +3,7 @@
 // message events, answers from knowledge.md via Qwen, and replies in the chat.
 // Just run `node server.js` anywhere with internet.
 
+import "dotenv/config";
 import * as Lark from "@larksuiteoapi/node-sdk";
 import fs from "node:fs";
 import http from "node:http";
@@ -44,12 +45,20 @@ const client = new Lark.Client({ appId: FEISHU_APP_ID, appSecret: FEISHU_APP_SEC
 const wsClient = new Lark.WSClient({ appId: FEISHU_APP_ID, appSecret: FEISHU_APP_SECRET, domain });
 
 // ---- knowledge base (hot-reloaded so edits take effect without restart) ----
+// KNOWLEDGE     = knowledge.md（手写：工具用法、入职流程等固定内容）
+// SYNCED        = knowledge.feishu.md（由 sync-feishu.mjs 抓「公开飞书文档」写入）
 let KNOWLEDGE = "";
+let SYNCED = "";
 function loadKnowledge() {
   try {
     KNOWLEDGE = fs.readFileSync(path.join(__dirname, "knowledge.md"), "utf8");
   } catch {
     KNOWLEDGE = "(知识库文件缺失)";
+  }
+  try {
+    SYNCED = fs.readFileSync(path.join(__dirname, "knowledge.feishu.md"), "utf8");
+  } catch {
+    SYNCED = "";
   }
 }
 loadKnowledge();
@@ -134,9 +143,13 @@ if (FEISHU_WIKI_SPACE_ID || FEISHU_DOC_TOKENS) {
   setInterval(refreshFeishuDocs, Math.max(60, Number(DOC_REFRESH_SECONDS) || 300) * 1000);
 }
 
-// what the model actually reads: local knowledge.md + live Feishu docs
+// what the model actually reads: knowledge.md + synced public docs + app-authorized docs
 function knowledgeText() {
-  return [KNOWLEDGE, FEISHU_DOCS && "===== 飞书文档（实时同步） =====\n" + FEISHU_DOCS]
+  return [
+    KNOWLEDGE,
+    SYNCED && "===== 飞书文档（公开链接同步） =====\n" + SYNCED,
+    FEISHU_DOCS && "===== 飞书文档（应用授权实时） =====\n" + FEISHU_DOCS,
+  ]
     .filter(Boolean)
     .join("\n\n");
 }
