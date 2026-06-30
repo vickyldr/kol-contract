@@ -209,6 +209,7 @@ export async function parseContractInfo(
     "4b) missing 里只能出现【上面字段清单里的 key】。清单里没有的东西一律不要报缺失（例如本次是银行收款、清单里根本没有 PayPal 字段时，绝不要追问 PayPal）。",
     "5) PayPal/Payoneer 收款：收款人姓名→账户名义人类 key、收款邮箱→账号/邮箱类 key；不要追问 IBAN/SWIFT/银行名等银行字段，也不要追问 kolCountry。仅银行收款才追问银行字段。",
     "6) unitPrice（单价，带币种如 6000 TWD）和 videoCount（视频数量）很重要：找不到必须放进 missing 提醒。",
+    "6b) email（红人接收合同的邮箱）是【可选】：红人给了就填，没给就【不要】放进 missing、不要追问。",
     "7) kolCountry：原文没明说国家时按文字语言/字体推断——繁体中文→Taiwan，日文→Japan，韩文→Korea，简体中文→China。",
     "8) accountBlock：收款人姓名与签约人/法人姓名明显不是同一人→third，否则 own。",
     "9) 值用原文原始格式，不要翻译人名/账号/地址。missing 的问题主语一律是“红人”，合并同类、尽量少。",

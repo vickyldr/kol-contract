@@ -155,10 +155,9 @@ export function runChecks(ctx: CheckContext): Check[] {
   if (!(ctx.videoCount ?? "").trim()) out.push({ level: "warn", text: "未填【合作视频数量】，请向红人确认。" });
   if (!(ctx.socialAccount ?? "").trim() && !(ctx.kolLink ?? "").trim())
     out.push({ level: "warn", text: "未填【红人社媒账号/链接】，请向红人索取主页或发布链接。" });
-  if (!(ctx.email ?? "").trim())
-    out.push({ level: "warn", text: "未填【红人接收合同的邮箱】，合同要发到这个邮箱，请向红人索取。" });
-  else if (!EMAIL.test(ctx.email.trim()))
-    out.push({ level: "warn", text: "红人接收合同的邮箱格式不对，请确认。" });
+  // 红人接收合同的邮箱是可选的：没给不提醒，只在给了但格式不对时轻提示
+  if ((ctx.email ?? "").trim() && !EMAIL.test(ctx.email.trim()))
+    out.push({ level: "info", text: "红人接收合同的邮箱格式看起来不对，请确认（没有也没关系，可不填）。" });
 
   // ---- OFAC sanctioned country (highest priority) ----
   const countryCandidates = [ctx.kolCountry, get(ctx, "country of bank account")];
