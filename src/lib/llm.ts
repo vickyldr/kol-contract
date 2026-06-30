@@ -11,7 +11,17 @@ import type { ContractEdit, Lang } from "./types";
 import { LANG_LABEL } from "./types";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const QWEN_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
+
+// DashScope has SEPARATE China and International accounts/keys — a key from one
+// is rejected (401 invalid_api_key) on the other's endpoint. Pick the endpoint
+// to match your key via env vars (default: China 国内百炼). Both support browser
+// CORS. VITE_QWEN_BASE_URL fully overrides; VITE_QWEN_REGION = "cn" | "intl".
+const QWEN_BASE =
+  import.meta.env.VITE_QWEN_BASE_URL ||
+  (import.meta.env.VITE_QWEN_REGION === "intl"
+    ? "https://dashscope-intl.aliyuncs.com"
+    : "https://dashscope.aliyuncs.com");
+const QWEN_URL = `${QWEN_BASE}/compatible-mode/v1/chat/completions`;
 
 const TIMEOUT_MS = 300_000;
 
