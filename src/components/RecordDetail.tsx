@@ -42,7 +42,7 @@ function specFromFields(fields: FillableField[]): ParseSpecItem[] {
     { key: "socialAccount", desc: "社媒账号或主页链接（TikTok/Instagram/YouTube/Telegram，可与 kolLink 相同）" },
     { key: "kolLink", desc: "发布频道/主页链接（只给一个链接时与 socialAccount 填一样即可）" },
     { key: "platform", desc: "发布平台（从链接推断）" },
-    { key: "email", desc: "红人接收合同/联系用的邮箱（不是 PayPal 收款邮箱）" },
+    { key: "email", desc: "红人接收合同/联系用的邮箱（可选，不是 PayPal 收款邮箱）" },
     { key: "unitPrice", desc: "单价（每条视频价格，带币种，如 USD 500 / 6000 TWD）" },
     { key: "videoCount", desc: "合作视频数量（数字）" },
     { key: "kolCountry", desc: "收款账户所在国家/地区（仅银行收款需要）" },
@@ -247,7 +247,8 @@ export function RecordDetail({
     // a bank template must not ask for PayPal fields just because the pasted
     // text had an (empty) PayPal section.
     const specKeys = new Set(spec.map((s) => s.key));
-    clean.missing = clean.missing.filter((m) => specKeys.has(m.key));
+    // email is optional — never nag for it
+    clean.missing = clean.missing.filter((m) => specKeys.has(m.key) && m.key !== "email");
     applyParsed(clean.values, { templateId: tplId, lang: det.lang });
     setParseMissing(clean.missing);
     setRevealed(true);
