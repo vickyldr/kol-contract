@@ -28,6 +28,24 @@ const ALL_KOL: KolField[] = [...PRIMARY_KOL, ...OPTIONAL_KOL];
 // top-level (non-kol, non-payment) keys the parser can fill directly
 const SCALAR_KEYS = ["unitPrice", "videoCount", "kolCountry", "currency", "addrStreet", "addrCity", "addrProvince"] as const;
 
+// Has this record been filled at all? (controls whether the detail form shows)
+function recordHasData(r: Record_): boolean {
+  const f = r.fields;
+  if (r.kolName.trim()) return true;
+  if (Object.values(f.kol).some((v) => (v ?? "").trim())) return true;
+  if (Object.values(f.payment).some((v) => (v ?? "").trim())) return true;
+  return !!(
+    f.unitPrice.trim() ||
+    f.videoCount.trim() ||
+    f.kolCountry.trim() ||
+    f.currency.trim() ||
+    f.addrStreet.trim() ||
+    f.addrCity.trim() ||
+    f.addrProvince.trim() ||
+    f.prepay
+  );
+}
+
 export function RecordDetail({
   record,
   products,
@@ -51,6 +69,9 @@ export function RecordDetail({
   const [aiBusy, setAiBusy] = useState(false);
   const [rawPaste, setRawPaste] = useState("");
   const [parseMissing, setParseMissing] = useState<{ key: string; question: string }[] | null>(null);
+  // The detail form below ① stays hidden until smart-fill runs (or the user opts
+  // into manual entry), so empty fields don't read as "go type these yourself".
+  const [revealed, setRevealed] = useState(() => recordHasData(record));
 
   async function runAi(fn: () => Promise<void>) {
     setAiBusy(true);
@@ -94,7 +115,12 @@ export function RecordDetail({
     onChange({ fields: { ...record.fields, ...patch } });
   }
   function setKol(field: KolField, value: string) {
-    setFieldsObj({ kol: { ...record.fields.kol, [field]: value } });
+    const patch: Partial<Record_> = {
+      fields: { ...record.fields, kol: { ...record.fields.kol, [field]: value } },
+    };
+    // keep the record's display name in sync with the legal name when unset
+    if (field === "legalName" && !record.kolName.trim()) patch.kolName = value;
+    onChange(patch);
   }
   function setPayment(key: string, value: string) {
     setFieldsObj({ payment: { ...record.fields.payment, [key]: value } });
@@ -245,16 +271,8 @@ export function RecordDetail({
       {error && <div className="error">{error}</div>}
 
       <div className="card">
-        <h3>基本信息</h3>
+        <h3>基本信息（先选产品和模板）</h3>
         <div className="grid2">
-          <label>
-            红人姓名 / 法人姓名
-            <input
-              value={record.kolName}
-              onChange={(e) => onChange({ kolName: e.target.value })}
-              placeholder="用于归档与搜索"
-            />
-          </label>
           <label>
             产品
             <select
@@ -316,11 +334,17 @@ export function RecordDetail({
               const res = await parseContractInfo(rawPaste, buildParseSpec());
               applyParsed(res.values);
               setParseMissing(res.missing);
+              setRevealed(true);
             })
           }
         >
           {aiBusy ? "识别中…" : "AI 识别并自动填充"}
         </button>
+        {!revealed && (
+          <button className="link" onClick={() => setRevealed(true)}>
+            或手动填写（不用 AI）
+          </button>
+        )}
         {!bytes && <span className="muted"> （请先在上方选择模板）</span>}
 
         {parseMissing && (
@@ -341,6 +365,8 @@ export function RecordDetail({
         )}
       </div>
 
+      {revealed && (
+        <>
       <div className="card">
         <h3>② 红人合同信息</h3>
         <div className="grid2">
@@ -595,6 +621,8 @@ export function RecordDetail({
         buildContract={buildContract}
         canBuild={!!bytes}
       />
+        </>
+      )}
     </div>
   );
 }
