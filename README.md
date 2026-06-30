@@ -63,6 +63,11 @@ npm run preview  # 预览构建结果
    之后 App 会自动用这个 Key，**同学打开即用、无需任何配置**（网页里已没有填 Key 的入口）。
    只设 `VITE_ANTHROPIC_KEY`（不设 `VITE_QWEN_KEY`）则自动切到 Claude。
 
+   > **千问 Key 的国内/国际之分**：阿里云"国内百炼"(aliyun.com) 和"国际站 Model Studio"(alibabacloud.com)
+   > 是两套独立账号，Key **不通用**，用错会报 `401 invalid_api_key`。本工具**默认走国内站**
+   > (`dashscope.aliyuncs.com`)。若你用的是**国际站** Key，加一个环境变量 `VITE_QWEN_REGION = intl`
+   > 即可切到国际站；也可用 `VITE_QWEN_BASE_URL` 完全自定义接口地址。
+
 > ⚠️ 这是纯前端应用，内置 Key 会随网页打包、能在浏览器里被看到——仅适合**内部使用**。请给该 Key
 > 设置**消费上限**，泄露时在阿里云百炼控制台**轮换**即可。Key 只存在 Vercel 环境变量里，不进 Git 仓库。
 > 本地开发可在项目根目录建 `.env.local` 写 `VITE_QWEN_KEY=...`。
