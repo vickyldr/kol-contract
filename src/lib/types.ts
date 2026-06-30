@@ -50,10 +50,6 @@ export interface ContractFields {
   videoCount: string;
   // which Party B account block to fill: own account vs. third-party account
   accountBlock: AccountBlock;
-  // bank registered address, split per the template label (streets/cities/state)
-  addrStreet: string;
-  addrCity: string;
-  addrProvince: string;
   // currency written into the "Account Type" cell (e.g. USD)
   currency: string;
   // prepay: swap the "Time of Payment" clause for an advance-payment one
@@ -73,9 +69,6 @@ export function emptyFields(): ContractFields {
     unitPrice: "",
     videoCount: "",
     accountBlock: "own",
-    addrStreet: "",
-    addrCity: "",
-    addrProvince: "",
     currency: "",
     prepay: false,
     prepayNote: "",
