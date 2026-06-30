@@ -2,14 +2,16 @@ import { useEffect, useState } from "react";
 import { Records } from "./components/Records";
 import { Templates } from "./components/Templates";
 import { Products } from "./components/Products";
+import { Assistant } from "./components/Assistant";
 import { loadBuiltins } from "./lib/templates";
 
-type Tab = "records" | "templates" | "products";
+type Tab = "records" | "templates" | "products" | "assistant";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "records", label: "合同记录" },
   { id: "templates", label: "模板" },
   { id: "products", label: "产品" },
+  { id: "assistant", label: "问答助手" },
 ];
 
 export function App() {
@@ -47,6 +49,7 @@ export function App() {
         {tab === "records" && <Records />}
         {tab === "templates" && <Templates />}
         {tab === "products" && <Products />}
+        {tab === "assistant" && <Assistant />}
       </main>
 
       <footer className="foot">
