@@ -54,6 +54,17 @@ npm run preview  # 预览构建结果
 
 内置默认产品：Rythmix、VivaVideo、AICatch、VivaCut、WiseMeal、Recco、Inspo、AIFlow、Rymo，可在「产品」页自行增删改。产品名会替换合同正文里的 `【Rythmix】`。
 
+## 部署（Vercel）与内置 Key
+
+1. Vercel → New Project → Import 本仓库 → Framework 选 **Vite** → Deploy。
+2. 想让同学**免填 Key**：在 Vercel 项目的 **Settings → Environment Variables** 添加
+   `VITE_QWEN_KEY = <你的千问 Key>`（用 Claude 则 `VITE_ANTHROPIC_KEY`），保存后 **Redeploy**。
+   之后 App 会自动用这个 Key，同学无需在「设置」里填写（设置页会提示「已内置默认 Key」）。
+
+> ⚠️ 这是纯前端应用，内置 Key 会随网页打包、能在浏览器里被看到——仅适合**内部使用**。请给该 Key
+> 设置**消费上限**，泄露时在阿里云百炼控制台**轮换**即可。Key 只存在 Vercel 环境变量里，不进 Git 仓库。
+> 同学若在「设置」里填了自己的 Key，则优先用自己的。
+
 ## 设置（AI 服务商）
 
 「合同修改」的翻译 / 总结 / 改约支持两家：
