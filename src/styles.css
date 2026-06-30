@@ -494,6 +494,37 @@ button:disabled {
   margin-bottom: 6px;
 }
 
+.checks ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.chk {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.chk-ico {
+  flex-shrink: 0;
+}
+.chk.error {
+  background: #fdeceb;
+  color: #b3261e;
+}
+.chk.warn {
+  background: #fff6e5;
+  color: #9a6a00;
+}
+.chk.info {
+  background: #eef2f7;
+  color: #4a5160;
+}
+
 .foot {
   text-align: center;
   color: var(--muted);

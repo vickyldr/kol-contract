@@ -53,6 +53,12 @@ export interface ContractFields {
   addrStreet: string;
   addrCity: string;
   addrProvince: string;
+  // currency written into the "Account Type" cell (e.g. USD)
+  currency: string;
+  // prepay: swap the "Time of Payment" clause for an advance-payment one
+  prepay: boolean;
+  prepayNote: string; // optional Chinese description of the custom split
+  prepayClause: string; // the clause text actually inserted (editable)
   // remaining payment values keyed by the template's normalized payment label
   payment: Record<string, string>;
 }
@@ -66,6 +72,10 @@ export function emptyFields(): ContractFields {
     addrStreet: "",
     addrCity: "",
     addrProvince: "",
+    currency: "",
+    prepay: false,
+    prepayNote: "",
+    prepayClause: "",
     payment: {},
   };
 }

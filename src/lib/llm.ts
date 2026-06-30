@@ -13,14 +13,31 @@ import { LANG_LABEL } from "./types";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const QWEN_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
 
-async function callLLM(system: string, user: string, maxTokens = 2000): Promise<string> {
+const TIMEOUT_MS = 90_000;
+
+// fetch with an abort timeout so a hung request fails clearly instead of forever.
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } catch (e) {
+    if ((e as Error).name === "AbortError")
+      throw new Error(`请求超时（${TIMEOUT_MS / 1000}s）。合同较长或网络较慢时可重试，或改用更快的模型。`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function callOnce(system: string, user: string, maxTokens: number): Promise<string> {
   const provider = getProvider();
   const key = getApiKey(provider);
   const model = getModel(provider);
   if (!key) throw new Error("尚未设置 API Key，请在「设置」中填写。");
 
   if (provider === "anthropic") {
-    const res = await fetch(ANTHROPIC_URL, {
+    const res = await fetchWithTimeout(ANTHROPIC_URL, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -40,7 +57,7 @@ async function callLLM(system: string, user: string, maxTokens = 2000): Promise<
   }
 
   // Qwen (OpenAI-compatible)
-  const res = await fetch(QWEN_URL, {
+  const res = await fetchWithTimeout(QWEN_URL, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
     body: JSON.stringify({
@@ -55,6 +72,19 @@ async function callLLM(system: string, user: string, maxTokens = 2000): Promise<
   if (!res.ok) throw new Error(`Qwen 请求失败 (${res.status})：${(await res.text()).slice(0, 300)}`);
   const json = await res.json();
   return (json.choices?.[0]?.message?.content ?? "").trim();
+}
+
+// One automatic retry on transient network/timeout failures.
+async function callLLM(system: string, user: string, maxTokens = 2000): Promise<string> {
+  try {
+    return await callOnce(system, user, maxTokens);
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (/超时|Failed to fetch|network/i.test(msg)) {
+      return await callOnce(system, user, maxTokens);
+    }
+    throw e;
+  }
 }
 
 // Pull the first JSON array/object out of a model response, tolerating fences.
@@ -102,6 +132,20 @@ export async function messageForKOL(
   ].join("\n");
   const user = `红人原诉求：\n"""\n${kolOriginal}\n"""\n\nTL 的内部判断：\n"""\n${tlReply}\n"""`;
   return callLLM(system, user);
+}
+
+// Convert a Chinese description of a custom prepay arrangement into a contract
+// clause in the target language (replaces the "Time of Payment" sentence).
+export async function generatePrepayClause(noteChinese: string, lang: Lang): Promise<string> {
+  const langName = LANG_LABEL[lang];
+  const system = [
+    "你是一名合同条款撰写助手。根据中文描述的「分期付款安排」，写出一句正式的合同「付款时间」条款。",
+    `条款必须用 ${langName} 书写，且必须明确：每一笔款项的【时间节点】与【百分比】。`,
+    "保持与合同其它条款一致的正式语气；结尾保留「乙方通过邮件确认账单后5个工作日内付款」之类的确认与时限说明。",
+    "只输出这一句（或两三句）条款正文，不要任何解释、不要引号。",
+  ].join("\n");
+  const user = `中文分期付款描述：\n"""\n${noteChinese}\n"""`;
+  return callLLM(system, user, 600);
 }
 
 // Step 5: produce minimal-change find/replace edits for the contract.

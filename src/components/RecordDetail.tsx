@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { saveAs } from "file-saver";
 import {
   bytesToBlob,
@@ -8,7 +8,15 @@ import {
   type FillInput,
 } from "../lib/docx";
 import { getTemplateBytes } from "../lib/templates";
-import { KOL_FIELD_LABEL_CN, isRegisteredAddress, type KolField } from "../lib/labels";
+import {
+  ACCOUNT_TYPE_KEY,
+  KOL_FIELD_LABEL_CN,
+  PREPAY_CLAUSE_DEFAULT,
+  isRegisteredAddress,
+  type KolField,
+} from "../lib/labels";
+import { runChecks } from "../lib/checks";
+import { generatePrepayClause } from "../lib/llm";
 import type { AccountBlock, ContractFields, Product, Record_, Template } from "../lib/types";
 import { LANG_LABEL } from "../lib/types";
 import { ModificationPanel } from "./ModificationPanel";
@@ -37,6 +45,19 @@ export function RecordDetail({
   const [loadingTpl, setLoadingTpl] = useState(false);
   const [error, setError] = useState("");
   const [showMore, setShowMore] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+
+  async function runAi(fn: () => Promise<void>) {
+    setAiBusy(true);
+    setError("");
+    try {
+      await fn();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setAiBusy(false);
+    }
+  }
 
   const template = templates.find((t) => t.id === record.templateId);
   const product = products.find((p) => p.id === record.productId);
@@ -76,17 +97,19 @@ export function RecordDetail({
 
   const paymentFields = fields.filter((f) => f.kind === "payment");
   const hasBankAddress = paymentFields.some((f) => isRegisteredAddress(f.key));
+  const hasAccountType = paymentFields.some((f) => f.key === ACCOUNT_TYPE_KEY);
 
-  const buildFillInput = useCallback((): FillInput => {
-    const method =
-      template?.payment ||
-      (paymentFields.some((f) => /paypal/i.test(f.label))
-        ? "paypal"
-        : paymentFields.some((f) => /payponeer|payoneer/i.test(f.label))
-          ? "payoneer"
-          : "bank");
+  const method =
+    template?.payment ||
+    (paymentFields.some((f) => /paypal/i.test(f.label))
+      ? "paypal"
+      : paymentFields.some((f) => /payponeer|payoneer/i.test(f.label))
+        ? "payoneer"
+        : "bank");
 
-    // assemble the split bank address into the registered-address label value
+  // Resolve the payment label -> value map, folding in the split bank address
+  // and the currency (account type). Used by both fill and the checks.
+  const resolvedPayment = useCallback((): Record<string, string> => {
     const payment = { ...record.fields.payment };
     const addr = [record.fields.addrStreet, record.fields.addrCity, record.fields.addrProvince]
       .map((s) => s.trim())
@@ -95,17 +118,45 @@ export function RecordDetail({
     for (const f of paymentFields) {
       if (isRegisteredAddress(f.key)) payment[f.key] = addr;
     }
+    if (record.fields.currency.trim()) payment[ACCOUNT_TYPE_KEY] = record.fields.currency.trim();
+    return payment;
+  }, [paymentFields, record.fields]);
 
-    return {
+  const buildFillInput = useCallback(
+    (): FillInput => ({
       productName: product?.contractName,
       method,
       unitPrice: record.fields.unitPrice,
       videoCount: record.fields.videoCount,
       accountBlock: record.fields.accountBlock,
+      prepay: record.fields.prepay,
+      prepayClause: record.fields.prepay
+        ? record.fields.prepayClause || PREPAY_CLAUSE_DEFAULT[template?.lang ?? record.lang]
+        : "",
       kol: record.fields.kol,
-      payment,
-    };
-  }, [template, product, paymentFields, record.fields]);
+      payment: resolvedPayment(),
+    }),
+    [product, method, template, record.fields, record.lang, resolvedPayment],
+  );
+
+  const checks = useMemo(
+    () =>
+      runChecks({
+        method,
+        lang: template?.lang ?? record.lang,
+        accountBlock: record.fields.accountBlock,
+        kolName: record.kolName,
+        legalName: record.fields.kol.legalName ?? "",
+        unitPrice: record.fields.unitPrice,
+        videoCount: record.fields.videoCount,
+        prepay: record.fields.prepay,
+        prepayNote: record.fields.prepayNote,
+        prepayClause: record.fields.prepayClause,
+        paymentFields,
+        values: resolvedPayment(),
+      }),
+    [method, template, record, paymentFields, resolvedPayment],
+  );
 
   // Build the filled contract bytes (used for download and as the base for mods).
   const buildContract = useCallback(async (): Promise<Uint8Array> => {
@@ -268,7 +319,7 @@ export function RecordDetail({
         )}
         <div className="grid2">
           {paymentFields.map((f) =>
-            isRegisteredAddress(f.key) ? null : (
+            isRegisteredAddress(f.key) || f.key === ACCOUNT_TYPE_KEY ? null : (
               <label key={f.key}>
                 {f.label}
                 <input
@@ -277,6 +328,16 @@ export function RecordDetail({
                 />
               </label>
             ),
+          )}
+          {hasAccountType && (
+            <label>
+              账户币种 Account Type / Currency
+              <input
+                value={record.fields.currency}
+                onChange={(e) => setFieldsObj({ currency: e.target.value })}
+                placeholder="如 USD（会覆盖模板里的示例）"
+              />
+            </label>
           )}
         </div>
 
@@ -309,6 +370,88 @@ export function RecordDetail({
           </>
         )}
       </div>
+
+      <div className="card">
+        <h3>支付时间 / 预付</h3>
+        <div className="field-block">
+          <div className="field-label">是否预付？</div>
+          <div className="seg">
+            <button
+              className={!record.fields.prepay ? "seg-btn active" : "seg-btn"}
+              onClick={() => setFieldsObj({ prepay: false })}
+            >
+              发布后支付（默认）
+            </button>
+            <button
+              className={record.fields.prepay ? "seg-btn active" : "seg-btn"}
+              onClick={() =>
+                setFieldsObj({
+                  prepay: true,
+                  prepayClause:
+                    record.fields.prepayClause || PREPAY_CLAUSE_DEFAULT[template?.lang ?? record.lang],
+                })
+              }
+            >
+              预付 prepay
+            </button>
+          </div>
+        </div>
+
+        {record.fields.prepay && (
+          <>
+            <p className="hint">
+              默认 50% 初稿通过后预付、50% 发布后支付。可填中文备注让 AI 改写（说明两次支付的时间节点和各付百分之几）。
+            </p>
+            <label>
+              备注（中文，可选）
+              <input
+                value={record.fields.prepayNote}
+                onChange={(e) => setFieldsObj({ prepayNote: e.target.value })}
+                placeholder="如：三个视频一起给初稿付一半，全部发布后付另一半"
+              />
+            </label>
+            <button
+              className="primary"
+              disabled={!!aiBusy || !record.fields.prepayNote.trim()}
+              onClick={() =>
+                runAi(async () => {
+                  const clause = await generatePrepayClause(
+                    record.fields.prepayNote,
+                    template?.lang ?? record.lang,
+                  );
+                  setFieldsObj({ prepayClause: clause });
+                })
+              }
+            >
+              {aiBusy ? "生成中…" : "AI 按备注改写预付条款"}
+            </button>
+            <label>
+              预付条款（会替换合同里的「Time of Payment」整句，可手动编辑）
+              <textarea
+                rows={4}
+                value={record.fields.prepayClause}
+                onChange={(e) => setFieldsObj({ prepayClause: e.target.value })}
+              />
+            </label>
+          </>
+        )}
+      </div>
+
+      {checks.length > 0 && (
+        <div className="card checks">
+          <h3>检查与提醒</h3>
+          <ul>
+            {checks.map((c, i) => (
+              <li key={i} className={`chk ${c.level}`}>
+                <span className="chk-ico">
+                  {c.level === "error" ? "⛔" : c.level === "warn" ? "⚠️" : "ℹ️"}
+                </span>
+                {c.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <button className="primary big" disabled={!bytes || loadingTpl} onClick={generate}>
         一键生成并下载合同

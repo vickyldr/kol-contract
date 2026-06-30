@@ -4,9 +4,11 @@
 import PizZip from "pizzip";
 import type { ContractEdit } from "./types";
 import {
+  ACCOUNT_TYPE_KEY,
   COUNT_ANCHORS,
   PAYMENT_LABEL_PREFIXES,
   PAYMENT_MARKERS,
+  PAYMENT_TIME_ANCHORS,
   PRICE_ANCHORS,
   PRODUCT_TOKEN,
   matchKolField,
@@ -206,7 +208,27 @@ function replaceText(
   return count;
 }
 
-// Fill the first empty 【 】 that follows one of `anchors`. Returns true if filled.
+// Find the first empty bracket pair (【 】 or [ ]) at/after `from`. Returns the
+// inner [start, end) range, or null.
+function findEmptyBracket(full: string, from: number): { start: number; end: number } | null {
+  const pairs: [string, string][] = [
+    ["【", "】"],
+    ["[", "]"],
+  ];
+  let best: { open: number; close: number } | null = null;
+  for (const [o, c] of pairs) {
+    const open = full.indexOf(o, from);
+    if (open < 0) continue;
+    const close = full.indexOf(c, open + 1);
+    if (close < 0) continue;
+    if (best === null || open < best.open) best = { open, close };
+  }
+  if (!best) return null;
+  if (full.slice(best.open + 1, best.close).trim() !== "") return null; // already filled
+  return { start: best.open + 1, end: best.close };
+}
+
+// Fill the first empty bracket that follows one of `anchors`. Returns true if filled.
 function fillBracketAfter(dom: Document, anchors: string[], value: string): boolean {
   if (!value) return false;
   for (const p of paragraphs(dom)) {
@@ -215,14 +237,26 @@ function fillBracketAfter(dom: Document, anchors: string[], value: string): bool
     for (const a of anchors) {
       const ai = full.indexOf(a);
       if (ai < 0) continue;
-      const open = full.indexOf("【", ai);
-      if (open < 0) continue;
-      const close = full.indexOf("】", open);
-      if (close < 0) continue;
-      if (full.slice(open + 1, close).trim() !== "") continue; // already filled
-      rebuildParagraph(dom, p, segs, open + 1, close, value, false);
+      const span = findEmptyBracket(full, ai);
+      if (!span) continue;
+      rebuildParagraph(dom, p, segs, span.start, span.end, value, false);
       return true;
     }
+  }
+  return false;
+}
+
+// Replace the full text of the first paragraph containing any anchor. Used to
+// swap the "Time of Payment" sentence for the prepay version.
+function replaceParagraphContaining(dom: Document, anchors: string[], newText: string): boolean {
+  if (!newText) return false;
+  for (const p of paragraphs(dom)) {
+    const segs = paragraphSegments(p);
+    if (segs.length === 0) continue;
+    const full = segs.map((s) => s.text).join("");
+    if (!anchors.some((a) => full.includes(a))) continue;
+    rebuildParagraph(dom, p, segs, 0, full.length, newText, false);
+    return true;
   }
   return false;
 }
@@ -252,9 +286,10 @@ export function detectFields(bytes: Uint8Array): FillableField[] {
     if (cells.length !== 2) continue;
     const a = cellText(cells[0]);
     const b = cellText(cells[1]);
-    if (!a || b) continue;
-    if (a.includes("【")) continue; // price/count cell, handled by anchors
+    if (!a || a.includes("【")) continue; // price/count cell, handled by anchors
     const na = normalizeLabel(a);
+    // account type (currency) is fillable even when pre-filled with a sample
+    if (b && na !== ACCOUNT_TYPE_KEY) continue;
     if (seen.has(na)) continue;
     const field = matchKolField(na);
     if (field) {
@@ -277,8 +312,12 @@ export interface FillInput {
   videoCount?: string;
   // which Party B account block to fill (own = first, third = second occurrence)
   accountBlock?: "own" | "third";
+  // prepay: when true, swap the "Time of Payment" paragraph for `prepayClause`
+  prepay?: boolean;
+  prepayClause?: string;
   kol: Partial<Record<KolField, string>>;
-  // payment values keyed by normalized label (matches detectFields key)
+  // payment values keyed by normalized label (matches detectFields key).
+  // The "account type" key (currency) overwrites its cell even when pre-filled.
   payment: Record<string, string>;
 }
 
@@ -320,8 +359,14 @@ export function fillContract(
   report.priceFilled = fillBracketAfter(dom, PRICE_ANCHORS, input.unitPrice ?? "");
   report.countFilled = fillBracketAfter(dom, COUNT_ANCHORS, input.videoCount ?? "");
 
+  // 2b) prepay: swap the default "Time of Payment" paragraph for the prepay one
+  if (input.prepay && input.prepayClause) {
+    replaceParagraphContaining(dom, PAYMENT_TIME_ANCHORS, input.prepayClause);
+  }
+
   // 3) label → value cells. KOL fields fill the first empty match; payment
   // fields fill the chosen account block (own = 1st occurrence, third = 2nd).
+  // "account type" (currency) overwrites its cell even when pre-filled.
   const seen = new Map<string, number>();
   const targetIdx = input.accountBlock === "third" ? 1 : 0;
   for (const tr of Array.from(dom.getElementsByTagNameNS(W_NS, "tr"))) {
@@ -329,8 +374,10 @@ export function fillContract(
     if (cells.length !== 2) continue;
     const a = cellText(cells[0]);
     const b = cellText(cells[1]);
-    if (!a || b || a.includes("【")) continue;
+    if (!a || a.includes("【")) continue;
     const na = normalizeLabel(a);
+    const overwrite = na === ACCOUNT_TYPE_KEY;
+    if (b && !overwrite) continue; // only fill empty cells, except account type
     const field = matchKolField(na);
     const isPayment = !field && isPaymentLabel(a, na);
     if (!field && !isPayment) continue;
@@ -343,7 +390,7 @@ export function fillContract(
     if (field && idx !== 0) continue; // KOL field: first occurrence only
     if (isPayment && idx !== targetIdx) continue; // payment: chosen block only
 
-    fillCell(dom, cells[1], cells[0], value);
+    fillCell(dom, cells[1], cells[0], value, overwrite);
     report.filledLabels.push(a);
   }
 
@@ -351,9 +398,21 @@ export function fillContract(
 }
 
 // Put `value` into the value cell, mirroring the label cell's run formatting.
-function fillCell(dom: Document, valueCell: Element, labelCell: Element, value: string): void {
+// When `overwrite`, existing text in the value cell is cleared first.
+function fillCell(
+  dom: Document,
+  valueCell: Element,
+  labelCell: Element,
+  value: string,
+  overwrite = false,
+): void {
   const p = valueCell.getElementsByTagNameNS(W_NS, "p")[0];
   if (!p) return;
+  if (overwrite) {
+    for (const t of Array.from(valueCell.getElementsByTagNameNS(W_NS, "t"))) {
+      t.textContent = "";
+    }
+  }
   const labelRun = labelCell.getElementsByTagNameNS(W_NS, "r")[0];
   const run = labelRun
     ? makeRun(dom, labelRun, value, false)
