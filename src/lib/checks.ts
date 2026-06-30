@@ -179,7 +179,7 @@ export function runChecks(ctx: CheckContext): Check[] {
       out.push({ level: "error", text: "Payoneer 不支持追回款项，不能预付款。请取消预付或更换支付方式。" });
     const email = get(ctx, "payponeer account email");
     if (email && !EMAIL.test(email))
-      out.push({ level: "warn", text: "Payoneer 账号一般是邮箱格式，请确认。" });
+      out.push({ level: "error", text: "Payoneer 账号必须是邮箱格式，请确认。" });
     const amt = amount(ctx.unitPrice);
     const vids = amount(ctx.videoCount);
     if (amt !== null && vids !== null && amt * vids < 50)

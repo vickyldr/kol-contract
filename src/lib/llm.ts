@@ -159,6 +159,7 @@ export async function parseContractInfo(
     "2) 金额带上币种（如 USD 500）。accountBlock 只能是 own 或 third（收款人姓名与签约人明显不一致时填 third）。",
     "3) 银行账号原样保留；邮箱保持邮箱格式。地址按 街道/城市/省州 拆开到对应 key。",
     "4) 值用原文语言/原始格式，不要翻译人名、账号、地址。",
+    "5) 信息不必完整：红人只给一个链接（哪怕只是一个 Instagram 链接）也行，socialAccount 与 kolLink 可填成同一个；platform 可从链接域名推断。",
     "只输出 JSON，不要任何解释。",
   ].join("\n");
   const fieldList = spec.map((s) => `- ${s.key}: ${s.desc}`).join("\n");
