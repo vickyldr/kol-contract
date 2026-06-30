@@ -27,6 +27,10 @@ const {
   ANTHROPIC_BASE = "https://api.anthropic.com",
   ANTHROPIC_MODEL = "claude-sonnet-4-6",
   HANDOFF_HINT = "我不太确定这个，建议直接找 TL 确认～",
+  // 让机器人实时读「你自己飞书里」的文档作为知识库（同组织才行）。
+  FEISHU_WIKI_SPACE_ID, // 知识库 space_id（整本知识库一起读，含子页面）
+  FEISHU_DOC_TOKENS, // 或单独几篇云文档 document_id，逗号分隔
+  DOC_REFRESH_SECONDS = "300", // 多久去飞书拉一次最新内容（秒）
 } = process.env;
 
 const MODE = RELAY_URL && RELAY_KEY ? "relay" : ANTHROPIC_KEY ? "claude" : "qwen";
@@ -51,6 +55,92 @@ function loadKnowledge() {
 loadKnowledge();
 setInterval(loadKnowledge, 60_000);
 
+// ---- LIVE knowledge from YOUR OWN Feishu docs/wiki (same org as the bot) ----
+// You edit the doc in Feishu → bot pulls the latest every DOC_REFRESH_SECONDS.
+const OPEN_BASE = FEISHU_DOMAIN === "lark" ? "https://open.larksuite.com" : "https://open.feishu.cn";
+let FEISHU_DOCS = ""; // text pulled from Feishu
+let _tok = { v: "", exp: 0 };
+
+async function tenantToken() {
+  if (_tok.v && Date.now() < _tok.exp) return _tok.v;
+  const res = await fetch(`${OPEN_BASE}/open-apis/auth/v3/tenant_access_token/internal`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ app_id: FEISHU_APP_ID, app_secret: FEISHU_APP_SECRET }),
+  });
+  const j = await res.json();
+  if (!j.tenant_access_token) throw new Error("tenant_access_token 失败: " + JSON.stringify(j).slice(0, 160));
+  _tok = { v: j.tenant_access_token, exp: Date.now() + Math.max(60, (j.expire || 7200) - 60) * 1000 };
+  return _tok.v;
+}
+
+async function fetchDocRaw(docId, token) {
+  const res = await fetch(`${OPEN_BASE}/open-apis/docx/v1/documents/${docId}/raw_content`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const j = await res.json();
+  if (j.code !== 0) throw new Error(`doc ${docId}: ${j.msg || j.code}`);
+  return j.data?.content || "";
+}
+
+// list every docx node in a wiki space, recursing into sub-pages
+async function listWikiDocs(spaceId, token, parent = "") {
+  const out = [];
+  let pageToken = "";
+  do {
+    const url = new URL(`${OPEN_BASE}/open-apis/wiki/v2/spaces/${spaceId}/nodes`);
+    url.searchParams.set("page_size", "50");
+    if (parent) url.searchParams.set("parent_node_token", parent);
+    if (pageToken) url.searchParams.set("page_token", pageToken);
+    const res = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+    const j = await res.json();
+    if (j.code !== 0) throw new Error(`wiki ${spaceId}: ${j.msg || j.code}`);
+    for (const n of j.data?.items || []) {
+      if (n.obj_type === "docx" && n.obj_token) out.push({ id: n.obj_token, title: n.title || n.obj_token });
+      if (n.has_child) out.push(...(await listWikiDocs(spaceId, token, n.node_token)));
+    }
+    pageToken = j.data?.has_more ? j.data.page_token : "";
+  } while (pageToken);
+  return out;
+}
+
+async function refreshFeishuDocs() {
+  if (!FEISHU_WIKI_SPACE_ID && !FEISHU_DOC_TOKENS) return;
+  try {
+    const token = await tenantToken();
+    const docs = [];
+    if (FEISHU_WIKI_SPACE_ID) docs.push(...(await listWikiDocs(FEISHU_WIKI_SPACE_ID, token)));
+    for (const id of (FEISHU_DOC_TOKENS || "").split(",").map((s) => s.trim()).filter(Boolean)) {
+      docs.push({ id, title: id });
+    }
+    const parts = [];
+    for (const d of docs) {
+      try {
+        parts.push(`# ${d.title}\n${await fetchDocRaw(d.id, token)}`);
+      } catch (e) {
+        console.error("拉取文档失败", d.id, String(e).slice(0, 120));
+      }
+    }
+    if (parts.length) {
+      FEISHU_DOCS = parts.join("\n\n---\n\n");
+      console.log(`已从飞书拉取 ${parts.length} 篇文档（${new Date().toLocaleTimeString()}）`);
+    }
+  } catch (e) {
+    console.error("飞书文档刷新失败:", String(e).slice(0, 160));
+  }
+}
+if (FEISHU_WIKI_SPACE_ID || FEISHU_DOC_TOKENS) {
+  refreshFeishuDocs();
+  setInterval(refreshFeishuDocs, Math.max(60, Number(DOC_REFRESH_SECONDS) || 300) * 1000);
+}
+
+// what the model actually reads: local knowledge.md + live Feishu docs
+function knowledgeText() {
+  return [KNOWLEDGE, FEISHU_DOCS && "===== 飞书文档（实时同步） =====\n" + FEISHU_DOCS]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 // ---- the brain: answer grounded in the knowledge base ----
 async function answer(question) {
   const system = [
@@ -59,7 +149,7 @@ async function answer(question) {
     "规则：1) 答案简短、可执行、分点，用中文；2) 知识库没覆盖的，明确说『这个我不确定，建议找 TL 确认』，绝不编造；3) 涉及金额/币种/合规/能不能改条款，提醒以 TL 最终确认为准。",
     "",
     "【团队知识库】",
-    KNOWLEDGE,
+    knowledgeText(),
   ].join("\n");
   // (1) OpenAI-compatible relay (中转) — most common in China for Claude
   if (MODE === "relay") {
@@ -173,7 +263,9 @@ const eventDispatcher = new Lark.EventDispatcher({}).register({
 wsClient.start({ eventDispatcher });
 const aiLabel =
   MODE === "relay" ? "中转 " + RELAY_MODEL : MODE === "claude" ? "Claude " + ANTHROPIC_MODEL : "Qwen " + QWEN_MODEL;
-console.log(`feishu-bot 已启动（长连接模式）domain=${FEISHU_DOMAIN} AI=${aiLabel}`);
+const docSrc =
+  FEISHU_WIKI_SPACE_ID || FEISHU_DOC_TOKENS ? "飞书文档(实时)+knowledge.md" : "knowledge.md";
+console.log(`feishu-bot 已启动（长连接模式）domain=${FEISHU_DOMAIN} AI=${aiLabel} 知识库=${docSrc}`);
 
 // Tiny health server so PaaS hosts (Railway/Render) see an open port and keep
 // the service alive. The bot itself uses an outbound long connection.
