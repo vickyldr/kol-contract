@@ -18,19 +18,22 @@ const {
   QWEN_KEY,
   QWEN_BASE = "https://dashscope.aliyuncs.com", // intl: https://dashscope-intl.aliyuncs.com
   QWEN_MODEL = "qwen-plus",
-  // 可选：填了 ANTHROPIC_KEY 就用 Claude（注意 api.anthropic.com 在国内连不上，
-  // 需要机器人跑在海外服务器，或把 ANTHROPIC_BASE 指向一个国内可达的中转地址）
+  // 用 Claude 中转（OpenAI 兼容格式，国内常见）：填中转的完整 chat/completions 地址 + key + 模型名。
+  RELAY_URL, // 例：https://你的中转域名/v1/chat/completions
+  RELAY_KEY,
+  RELAY_MODEL = "claude-3-5-sonnet-20241022",
+  // 或 Anthropic 原生接口（/v1/messages，x-api-key）。多数国内中转用上面的 RELAY_*，不用这个。
   ANTHROPIC_KEY,
   ANTHROPIC_BASE = "https://api.anthropic.com",
   ANTHROPIC_MODEL = "claude-sonnet-4-6",
   HANDOFF_HINT = "我不太确定这个，建议直接找 TL 确认～",
 } = process.env;
 
-if (!FEISHU_APP_ID || !FEISHU_APP_SECRET || (!QWEN_KEY && !ANTHROPIC_KEY)) {
-  console.error("缺少环境变量：FEISHU_APP_ID / FEISHU_APP_SECRET / (QWEN_KEY 或 ANTHROPIC_KEY)");
+const MODE = RELAY_URL && RELAY_KEY ? "relay" : ANTHROPIC_KEY ? "claude" : "qwen";
+if (!FEISHU_APP_ID || !FEISHU_APP_SECRET || (!QWEN_KEY && MODE === "qwen")) {
+  console.error("缺少环境变量：FEISHU_APP_ID / FEISHU_APP_SECRET / (QWEN_KEY 或 RELAY_URL+RELAY_KEY 或 ANTHROPIC_KEY)");
   process.exit(1);
 }
-const USE_CLAUDE = !!ANTHROPIC_KEY;
 
 const domain = FEISHU_DOMAIN === "lark" ? Lark.Domain.Lark : Lark.Domain.Feishu;
 const client = new Lark.Client({ appId: FEISHU_APP_ID, appSecret: FEISHU_APP_SECRET, domain });
@@ -58,7 +61,27 @@ async function answer(question) {
     "【团队知识库】",
     KNOWLEDGE,
   ].join("\n");
-  if (USE_CLAUDE) {
+  // (1) OpenAI-compatible relay (中转) — most common in China for Claude
+  if (MODE === "relay") {
+    const res = await fetch(RELAY_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${RELAY_KEY}` },
+      body: JSON.stringify({
+        model: RELAY_MODEL,
+        max_tokens: 900,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: question },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`中转 ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const j = await res.json();
+    return (j.choices?.[0]?.message?.content ?? "").trim();
+  }
+
+  // (2) Anthropic native
+  if (MODE === "claude") {
     const res = await fetch(`${ANTHROPIC_BASE}/v1/messages`, {
       method: "POST",
       headers: {
@@ -148,9 +171,9 @@ const eventDispatcher = new Lark.EventDispatcher({}).register({
 });
 
 wsClient.start({ eventDispatcher });
-console.log(
-  `feishu-bot 已启动（长连接模式）domain=${FEISHU_DOMAIN} AI=${USE_CLAUDE ? "Claude " + ANTHROPIC_MODEL : "Qwen " + QWEN_MODEL}`,
-);
+const aiLabel =
+  MODE === "relay" ? "中转 " + RELAY_MODEL : MODE === "claude" ? "Claude " + ANTHROPIC_MODEL : "Qwen " + QWEN_MODEL;
+console.log(`feishu-bot 已启动（长连接模式）domain=${FEISHU_DOMAIN} AI=${aiLabel}`);
 
 // Tiny health server so PaaS hosts (Railway/Render) see an open port and keep
 // the service alive. The bot itself uses an outbound long connection.
