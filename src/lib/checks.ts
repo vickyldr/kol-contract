@@ -20,11 +20,14 @@ export interface CheckContext {
   unitPrice: string;
   videoCount: string;
   prepay: boolean;
-  prepayNote: string;
-  prepayClause: string;
+  corporate: boolean; // 对公账户
   paymentFields: FillableField[]; // detected payment labels for the template
   values: Record<string, string>; // resolved label(normalized) -> value
 }
+
+// Our company info for the other side to fill the invoice (对公).
+export const COMPANY_INFO =
+  "Quvideo (Hong Kong) Limited, Suite 6503, 65/F, Central Plaza, 18 Harbour Road, Wan Chai, Hong Kong";
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -62,8 +65,7 @@ export function runChecks(ctx: CheckContext): Check[] {
     if (email && !EMAIL.test(email))
       out.push({ level: "error", text: "PayPal 账号必须是邮箱格式（不支持 PayPal ID / paypal.me 链接 / 手机号）。" });
     if (/krw|won|원|韩/i.test(get(ctx, "account type") + ctx.unitPrice))
-      out.push({ level: "warn", text: "PayPal 不支持韩币（KRW）收款。韩国红人 PayPal 只能收韩币以外不行——请改用银行或确认币种。" });
-    out.push({ level: "info", text: "提醒：PayPal 支付在审批里公司名称要写 Ocean Look（其余支付方式是 Quvideo）。" });
+      out.push({ level: "warn", text: "PayPal 不支持韩币（KRW）收款，请改用银行或确认币种。" });
   }
 
   // ---- Payoneer ----
@@ -134,19 +136,22 @@ export function runChecks(ctx: CheckContext): Check[] {
       });
   }
 
-  // ---- prepay clarity ----
-  if (ctx.prepay) {
-    if (!ctx.prepayNote && !ctx.prepayClause)
-      out.push({ level: "info", text: "预付备注请写清楚：两次支付的时间节点与各付百分之几（审批不能有模糊）。" });
-    out.push({ level: "info", text: "审批备注请注明是「预付/尾款」，若本次只付部分视频的钱也要写明。" });
-  }
-
   // ---- currency reminder ----
   if (method === "bank" && has("account type") && !get(ctx, "account type"))
     out.push({ level: "info", text: "请填写银行账户币种（Account Type，如 USD），并确认该账户能接受国际汇款。" });
 
-  // ---- always ----
-  out.push({ level: "info", text: "提交前请核对：合同 / 审批 / 收款信息 三处完全一致。" });
+  // ---- 对公账户 (corporate) ----
+  if (ctx.corporate) {
+    const invoiceTpl =
+      method === "paypal" || method === "payoneer" ? "invoice-Ocean Look.xlsx" : "invoice-Quvideo.xlsx";
+    out.push({ level: "warn", text: "对公账户：先确认对方是否有对私账户可收款（对私更快更方便）。" });
+    out.push({ level: "warn", text: "若对方坚持对公：需对方提供 ①公司资质证明 ②发票（资质无严格要求，按对方理解提供即可）。" });
+    out.push({ level: "info", text: `发我方公司信息供对方开票：${COMPANY_INFO}` });
+    out.push({
+      level: "info",
+      text: `发票模板：本次为 ${method || "（未指定）"} 支付，请用 ${invoiceTpl}（银行→invoice-Quvideo.xlsx；PayPal/Payoneer→invoice-Ocean Look.xlsx）。`,
+    });
+  }
 
   return out;
 }

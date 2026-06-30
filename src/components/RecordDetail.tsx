@@ -150,8 +150,7 @@ export function RecordDetail({
         unitPrice: record.fields.unitPrice,
         videoCount: record.fields.videoCount,
         prepay: record.fields.prepay,
-        prepayNote: record.fields.prepayNote,
-        prepayClause: record.fields.prepayClause,
+        corporate: record.fields.corporate,
         paymentFields,
         values: resolvedPayment(),
       }),
@@ -299,18 +298,37 @@ export function RecordDetail({
         <h3>付款信息</h3>
         <p className="hint">以下字段根据所选模板自动识别（{template?.payment || "未指定"}）。只填你有的即可。</p>
 
-        <div className="field-block">
-          <div className="field-label">填入哪个账户栏？</div>
-          <div className="seg">
-            {(["own", "third"] as AccountBlock[]).map((b) => (
+        <div className="row">
+          <div className="field-block">
+            <div className="field-label">填入哪个账户栏？</div>
+            <div className="seg">
+              {(["own", "third"] as AccountBlock[]).map((b) => (
+                <button
+                  key={b}
+                  className={record.fields.accountBlock === b ? "seg-btn active" : "seg-btn"}
+                  onClick={() => setFieldsObj({ accountBlock: b })}
+                >
+                  {b === "own" ? "本人账户 own account" : "第三方账户 third-party"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="field-block">
+            <div className="field-label">是否对公账户？</div>
+            <div className="seg">
               <button
-                key={b}
-                className={record.fields.accountBlock === b ? "seg-btn active" : "seg-btn"}
-                onClick={() => setFieldsObj({ accountBlock: b })}
+                className={!record.fields.corporate ? "seg-btn active" : "seg-btn"}
+                onClick={() => setFieldsObj({ corporate: false })}
               >
-                {b === "own" ? "本人账户 own account" : "第三方账户 third-party"}
+                对私 personal
               </button>
-            ))}
+              <button
+                className={record.fields.corporate ? "seg-btn active" : "seg-btn"}
+                onClick={() => setFieldsObj({ corporate: true })}
+              >
+                对公 corporate
+              </button>
+            </div>
           </div>
         </div>
 

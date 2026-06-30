@@ -59,6 +59,8 @@ export interface ContractFields {
   prepay: boolean;
   prepayNote: string; // optional Chinese description of the custom split
   prepayClause: string; // the clause text actually inserted (editable)
+  // 对公账户：surfaces the corporate-payment checklist
+  corporate: boolean;
   // remaining payment values keyed by the template's normalized payment label
   payment: Record<string, string>;
 }
@@ -76,6 +78,7 @@ export function emptyFields(): ContractFields {
     prepay: false,
     prepayNote: "",
     prepayClause: "",
+    corporate: false,
     payment: {},
   };
 }

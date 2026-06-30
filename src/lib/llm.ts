@@ -13,7 +13,7 @@ import { LANG_LABEL } from "./types";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const QWEN_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions";
 
-const TIMEOUT_MS = 90_000;
+const TIMEOUT_MS = 300_000;
 
 // fetch with an abort timeout so a hung request fails clearly instead of forever.
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
@@ -23,7 +23,7 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
     return await fetch(url, { ...init, signal: ctrl.signal });
   } catch (e) {
     if ((e as Error).name === "AbortError")
-      throw new Error(`请求超时（${TIMEOUT_MS / 1000}s）。合同较长或网络较慢时可重试，或改用更快的模型。`);
+      throw new Error(`请求超时（${TIMEOUT_MS / 60000} 分钟）。可重试，或改用更快的模型。`);
     throw e;
   } finally {
     clearTimeout(timer);
