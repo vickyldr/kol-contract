@@ -28,8 +28,8 @@ import { LANG_LABEL } from "../lib/types";
 import { ModificationPanel } from "./ModificationPanel";
 
 // KOL fields shown prominently vs. tucked under "更多(可选)".
-const PRIMARY_KOL: KolField[] = ["legalName", "socialAccount", "kolLink", "platform"];
-const OPTIONAL_KOL: KolField[] = ["email", "contactAddress", "identityNumber"];
+const PRIMARY_KOL: KolField[] = ["legalName", "email", "socialAccount", "kolLink", "platform"];
+const OPTIONAL_KOL: KolField[] = ["contactAddress", "identityNumber"];
 const ALL_KOL: KolField[] = [...PRIMARY_KOL, ...OPTIONAL_KOL];
 // top-level (non-kol, non-payment) keys the parser can fill directly
 const SCALAR_KEYS = ["unitPrice", "videoCount", "kolCountry", "currency"] as const;
@@ -42,6 +42,7 @@ function specFromFields(fields: FillableField[]): ParseSpecItem[] {
     { key: "socialAccount", desc: "社媒账号或主页链接（TikTok/Instagram/YouTube/Telegram，可与 kolLink 相同）" },
     { key: "kolLink", desc: "发布频道/主页链接（只给一个链接时与 socialAccount 填一样即可）" },
     { key: "platform", desc: "发布平台（从链接推断）" },
+    { key: "email", desc: "红人接收合同/联系用的邮箱（不是 PayPal 收款邮箱）" },
     { key: "unitPrice", desc: "单价（每条视频价格，带币种，如 USD 500 / 6000 TWD）" },
     { key: "videoCount", desc: "合作视频数量（数字）" },
     { key: "kolCountry", desc: "收款账户所在国家/地区（仅银行收款需要）" },
@@ -294,6 +295,7 @@ export function RecordDetail({
         kolName: record.kolName,
         legalName: record.fields.kol.legalName ?? "",
         kolCountry: record.fields.kolCountry,
+        email: record.fields.kol.email ?? "",
         socialAccount: record.fields.kol.socialAccount ?? "",
         kolLink: record.fields.kol.kolLink ?? "",
         unitPrice: record.fields.unitPrice,
