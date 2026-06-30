@@ -229,6 +229,20 @@ export async function parseContractInfo(
   };
 }
 
+// Team Q&A / onboarding assistant: answer a question grounded in the knowledge
+// base (付款 SOP / 改约 SOP / 工具用法 / 入职流程). Never fabricates.
+export async function askAssistant(question: string, knowledge: string): Promise<string> {
+  const system = [
+    "你是 KOL 商务团队的入职/答疑助理。",
+    "只根据下面【团队知识库】回答问题（付款 SOP、合同修改 SOP、合同助手工具用法、入职流程）。",
+    "规则：1) 答案简短、可执行、分点，用中文；2) 知识库没覆盖的，明确说『这个我不确定，建议找 TL 确认』，绝不编造；3) 涉及金额/币种/合规/能不能改条款，提醒以 TL 最终确认为准。",
+    "",
+    "【团队知识库】",
+    knowledge,
+  ].join("\n");
+  return callLLM(system, question, 900);
+}
+
 // Convert a Chinese description of a custom prepay arrangement into a contract
 // clause in the target language (replaces the "Time of Payment" sentence).
 export async function generatePrepayClause(noteChinese: string, lang: Lang): Promise<string> {
