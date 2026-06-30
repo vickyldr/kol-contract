@@ -106,7 +106,9 @@ export function setApiKey(provider: Provider, k: string): void {
 }
 export function getModel(provider: Provider = getProvider()): string {
   const stored = localStorage.getItem(provider === "qwen" ? QWEN_MODEL : ANTHROPIC_MODEL);
-  return stored || (provider === "qwen" ? DEFAULT_QWEN_MODEL : DEFAULT_ANTHROPIC_MODEL);
+  const envModel =
+    provider === "qwen" ? import.meta.env.VITE_QWEN_MODEL : import.meta.env.VITE_ANTHROPIC_MODEL;
+  return stored || envModel || (provider === "qwen" ? DEFAULT_QWEN_MODEL : DEFAULT_ANTHROPIC_MODEL);
 }
 export function setModel(provider: Provider, m: string): void {
   localStorage.setItem(provider === "qwen" ? QWEN_MODEL : ANTHROPIC_MODEL, m);

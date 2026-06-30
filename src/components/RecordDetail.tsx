@@ -270,6 +270,8 @@ export function RecordDetail({
         kolName: record.kolName,
         legalName: record.fields.kol.legalName ?? "",
         kolCountry: record.fields.kolCountry,
+        socialAccount: record.fields.kol.socialAccount ?? "",
+        kolLink: record.fields.kol.kolLink ?? "",
         unitPrice: record.fields.unitPrice,
         videoCount: record.fields.videoCount,
         prepay: record.fields.prepay,

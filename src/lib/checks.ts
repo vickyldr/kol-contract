@@ -19,7 +19,9 @@ export interface CheckContext {
   accountBlock: AccountBlock;
   kolName: string;
   legalName: string;
-  kolCountry: string; // 红人国家/地区
+  kolCountry: string; // 收款账户所在国家/地区
+  socialAccount: string;
+  kolLink: string;
   unitPrice: string;
   videoCount: string;
   prepay: boolean;
@@ -146,6 +148,12 @@ export function runChecks(ctx: CheckContext): Check[] {
   const out: Check[] = [];
   const { method } = ctx;
   const has = (key: string) => ctx.paymentFields.some((f) => f.key === key);
+
+  // ---- required-field reminders (deterministic, always run) ----
+  if (!(ctx.unitPrice ?? "").trim()) out.push({ level: "warn", text: "未填【单价】（合同 Annex 价格），请向红人确认。" });
+  if (!(ctx.videoCount ?? "").trim()) out.push({ level: "warn", text: "未填【合作视频数量】，请向红人确认。" });
+  if (!(ctx.socialAccount ?? "").trim() && !(ctx.kolLink ?? "").trim())
+    out.push({ level: "warn", text: "未填【红人社媒账号/链接】，请向红人索取主页或发布链接。" });
 
   // ---- OFAC sanctioned country (highest priority) ----
   const countryCandidates = [ctx.kolCountry, get(ctx, "country of bank account")];
