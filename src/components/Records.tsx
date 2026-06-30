@@ -3,6 +3,10 @@ import { genId, loadProducts, loadRecords, saveRecords } from "../lib/storage";
 import { allTemplates } from "../lib/templates";
 import { emptyFields, type Product, type Record_, type Template } from "../lib/types";
 import { RecordDetail } from "./RecordDetail";
+import { extractHandle } from "../lib/util";
+
+const kolHandle = (r: Record_): string =>
+  extractHandle(r.fields.kol.socialAccount, r.fields.kol.kolLink);
 
 // Pull the KOL id / handle from the social account or link, e.g.
 // "instagram.com/@johndoe" / "instagram.com/johndoe/" / "@johndoe" -> "@johndoe".

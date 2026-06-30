@@ -12,10 +12,10 @@ import {
   ACCOUNT_TYPE_KEY,
   KOL_FIELD_LABEL_CN,
   PREPAY_CLAUSE_DEFAULT,
-  isRegisteredAddress,
   type KolField,
 } from "../lib/labels";
 import { runChecks } from "../lib/checks";
+import { extractHandle, safeFileName } from "../lib/util";
 import {
   detectTemplate,
   generatePrepayClause,
@@ -32,7 +32,7 @@ const PRIMARY_KOL: KolField[] = ["legalName", "socialAccount", "kolLink", "platf
 const OPTIONAL_KOL: KolField[] = ["email", "contactAddress", "identityNumber"];
 const ALL_KOL: KolField[] = [...PRIMARY_KOL, ...OPTIONAL_KOL];
 // top-level (non-kol, non-payment) keys the parser can fill directly
-const SCALAR_KEYS = ["unitPrice", "videoCount", "kolCountry", "currency", "addrStreet", "addrCity", "addrProvince"] as const;
+const SCALAR_KEYS = ["unitPrice", "videoCount", "kolCountry", "currency"] as const;
 
 // Build the AI extraction spec from a template's detected fillable fields.
 function specFromFields(fields: FillableField[]): ParseSpecItem[] {
@@ -50,13 +50,8 @@ function specFromFields(fields: FillableField[]): ParseSpecItem[] {
   if (pay.some((f) => f.key === ACCOUNT_TYPE_KEY))
     spec.push({ key: "currency", desc: "银行账户币种 Account Type（如 USD）" });
   for (const f of pay) {
-    if (isRegisteredAddress(f.key) || f.key === ACCOUNT_TYPE_KEY) continue;
+    if (f.key === ACCOUNT_TYPE_KEY) continue;
     spec.push({ key: f.key, desc: f.label.replace(/\s+/g, " ").trim() });
-  }
-  if (pay.some((f) => isRegisteredAddress(f.key))) {
-    spec.push({ key: "addrStreet", desc: "收款人地址-街道/详细地址" });
-    spec.push({ key: "addrCity", desc: "收款人地址-城市" });
-    spec.push({ key: "addrProvince", desc: "收款人地址-省/州" });
   }
   return spec;
 }
@@ -124,9 +119,6 @@ function recordHasData(r: Record_): boolean {
     f.videoCount.trim() ||
     f.kolCountry.trim() ||
     f.currency.trim() ||
-    f.addrStreet.trim() ||
-    f.addrCity.trim() ||
-    f.addrProvince.trim() ||
     f.prepay
   );
 }
@@ -213,7 +205,6 @@ export function RecordDetail({
   }
 
   const paymentFields = fields.filter((f) => f.kind === "payment");
-  const hasBankAddress = paymentFields.some((f) => isRegisteredAddress(f.key));
   const hasAccountType = paymentFields.some((f) => f.key === ACCOUNT_TYPE_KEY);
 
   // Merge AI-extracted values into the record (optionally with extra patch:
@@ -267,16 +258,9 @@ export function RecordDetail({
   // and the currency (account type). Used by both fill and the checks.
   const resolvedPayment = useCallback((): Record<string, string> => {
     const payment = { ...record.fields.payment };
-    const addr = [record.fields.addrStreet, record.fields.addrCity, record.fields.addrProvince]
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .join(", ");
-    for (const f of paymentFields) {
-      if (isRegisteredAddress(f.key)) payment[f.key] = addr;
-    }
     if (record.fields.currency.trim()) payment[ACCOUNT_TYPE_KEY] = record.fields.currency.trim();
     return payment;
-  }, [paymentFields, record.fields]);
+  }, [record.fields]);
 
   const buildFillInput = useCallback(
     (): FillInput => ({
@@ -330,8 +314,10 @@ export function RecordDetail({
     }
     try {
       const { out, report } = fillContract(bytes, buildFillInput());
-      const base = (record.kolName || "contract").replace(/[\\/:*?"<>|]/g, "_");
-      saveAs(bytesToBlob(out), `${base}_${product?.name ?? ""}_${template?.lang ?? ""}.docx`);
+      const handle = extractHandle(record.fields.kol.socialAccount, record.fields.kol.kolLink);
+      const id = safeFileName(handle || record.fields.kol.legalName || record.kolName);
+      const date = new Date().toISOString().slice(0, 10);
+      saveAs(bytesToBlob(out), `${id}_${product?.name ?? "product"}_${date}.docx`);
       if (report.filledLabels.length === 0)
         setError("已生成，但没有任何字段被填充——请检查模板与输入。");
     } catch (e) {
@@ -551,7 +537,7 @@ export function RecordDetail({
         )}
         <div className="grid2">
           {paymentFields.map((f) =>
-            isRegisteredAddress(f.key) || f.key === ACCOUNT_TYPE_KEY ? null : (
+            f.key === ACCOUNT_TYPE_KEY ? null : (
               <label key={f.key}>
                 {f.label}
                 <input
@@ -572,35 +558,6 @@ export function RecordDetail({
             </label>
           )}
         </div>
-
-        {hasBankAddress && (
-          <>
-            <h4>账户注册地址（自动拆解填入 Registered Address）</h4>
-            <div className="grid2">
-              <label>
-                街道 Street / Address
-                <input
-                  value={record.fields.addrStreet}
-                  onChange={(e) => setFieldsObj({ addrStreet: e.target.value })}
-                />
-              </label>
-              <label>
-                城市 City
-                <input
-                  value={record.fields.addrCity}
-                  onChange={(e) => setFieldsObj({ addrCity: e.target.value })}
-                />
-              </label>
-              <label>
-                省/州 Province / State
-                <input
-                  value={record.fields.addrProvince}
-                  onChange={(e) => setFieldsObj({ addrProvince: e.target.value })}
-                />
-              </label>
-            </div>
-          </>
-        )}
       </div>
 
       <div className="card">
