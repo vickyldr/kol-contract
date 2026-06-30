@@ -45,6 +45,7 @@ export type AccountBlock = "own" | "third";
 // Autofill inputs, saved on the record so the filled contract is reproducible.
 export interface ContractFields {
   kol: Partial<Record<KolField, string>>;
+  kolCountry: string; // 红人国家/地区 (for sanctions/region checks; not filled into the doc)
   unitPrice: string;
   videoCount: string;
   // which Party B account block to fill: own account vs. third-party account
@@ -68,6 +69,7 @@ export interface ContractFields {
 export function emptyFields(): ContractFields {
   return {
     kol: {},
+    kolCountry: "",
     unitPrice: "",
     videoCount: "",
     accountBlock: "own",

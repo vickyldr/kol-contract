@@ -147,6 +147,7 @@ export function RecordDetail({
         accountBlock: record.fields.accountBlock,
         kolName: record.kolName,
         legalName: record.fields.kol.legalName ?? "",
+        kolCountry: record.fields.kolCountry,
         unitPrice: record.fields.unitPrice,
         videoCount: record.fields.videoCount,
         prepay: record.fields.prepay,
@@ -272,6 +273,14 @@ export function RecordDetail({
               value={record.fields.videoCount}
               onChange={(e) => setFieldsObj({ videoCount: e.target.value })}
               placeholder="如 3"
+            />
+          </label>
+          <label>
+            红人国家/地区
+            <input
+              value={record.fields.kolCountry}
+              onChange={(e) => setFieldsObj({ kolCountry: e.target.value })}
+              placeholder="如 Taiwan / Turkey（用于制裁名单与地区规则检查）"
             />
           </label>
         </div>
