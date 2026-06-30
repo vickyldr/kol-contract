@@ -4,6 +4,23 @@ import { allTemplates } from "../lib/templates";
 import { emptyFields, type Product, type Record_, type Template } from "../lib/types";
 import { RecordDetail } from "./RecordDetail";
 
+// Pull the KOL id / handle from the social account or link, e.g.
+// "instagram.com/@johndoe" / "instagram.com/johndoe/" / "@johndoe" -> "@johndoe".
+function kolHandle(r: Record_): string {
+  const src = (r.fields.kol.socialAccount || r.fields.kol.kolLink || "").trim();
+  if (!src) return "";
+  const at = src.match(/@([A-Za-z0-9._]+)/);
+  if (at) return "@" + at[1];
+  const seg = src
+    .replace(/^https?:\/\//i, "")
+    .replace(/[?#].*$/, "")
+    .split("/")
+    .filter(Boolean);
+  // last path segment after the domain
+  if (seg.length >= 2) return "@" + seg[seg.length - 1];
+  return "";
+}
+
 export function Records() {
   const [records, setRecords] = useState<Record_[]>(loadRecords());
   const [products, setProducts] = useState<Product[]>(loadProducts());
@@ -51,6 +68,7 @@ export function Records() {
         templateName(r.templateId),
         r.fields.kol.kolLink ?? "",
         r.fields.kol.socialAccount ?? "",
+        kolHandle(r),
         ...r.mods.map((m) => m.title),
       ]
         .join(" ")
@@ -96,7 +114,7 @@ export function Records() {
 
       <input
         className="search"
-        placeholder="🔍 搜索：红人姓名 / 产品 / 链接 / 账号 / 模板…"
+        placeholder="🔍 搜索：红人姓名 / 红人ID(@handle) / 产品 / 链接 / 模板…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
@@ -109,6 +127,7 @@ export function Records() {
           <li key={r.id} className="rec-item" onClick={() => setActiveId(r.id)}>
             <div className="rec-main">
               <strong>{r.kolName || "(未命名红人)"}</strong>
+              {kolHandle(r) && <span className="handle">{kolHandle(r)}</span>}
               <span className="badge">{productName(r.productId)}</span>
               {r.mods.length > 0 && <span className="badge mod">{r.mods.length} 次修改</span>}
             </div>
