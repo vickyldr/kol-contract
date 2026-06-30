@@ -144,6 +144,31 @@ export async function messageForKOL(
   return callLLM(system, user);
 }
 
+// Decide which template to use from the pasted info: language (Japan→ja,
+// Korea→ko, else→en), payment method, and bank format (iban/swift).
+export interface TemplateHint {
+  lang: Lang;
+  method: "bank" | "paypal" | "payoneer";
+  bankFormat: "iban" | "swift";
+}
+export async function detectTemplate(rawText: string): Promise<TemplateHint> {
+  const system = [
+    "根据红人粘贴的收款/合作信息，判断三件事，只输出一个 JSON 对象：",
+    '{"lang":"ja|ko|en","method":"bank|paypal|payoneer","bankFormat":"iban|swift"}',
+    "1) lang：收款人/红人在【日本】→ja，在【韩国】→ko，其它任何国家/地区一律→en。",
+    "2) method：收款方式——出现 PayPal→paypal；Payoneer→payoneer；银行/Bank/IBAN/SWIFT/账号→bank。",
+    "3) bankFormat：仅银行有意义；账号是 IBAN 格式（欧洲、土耳其等）→iban，否则→swift；非银行就填 swift。",
+    "判断不了 method 时默认 paypal。只输出 JSON，不要解释。",
+  ].join("\n");
+  const raw = await callLLM(system, `红人信息：\n"""\n${rawText}\n"""`, 200);
+  const j = extractJson(raw) as Partial<TemplateHint>;
+  return {
+    lang: j?.lang === "ja" ? "ja" : j?.lang === "ko" ? "ko" : "en",
+    method: j?.method === "bank" ? "bank" : j?.method === "payoneer" ? "payoneer" : "paypal",
+    bankFormat: j?.bankFormat === "iban" ? "iban" : "swift",
+  };
+}
+
 // Extract structured contract fields from a blob of pasted info. `spec` lists
 // the fields to look for (key + Chinese description, including the template's
 // payment labels). Returns the recognized values plus the fields it couldn't

@@ -27,8 +27,8 @@ export function Records() {
       id: genId(),
       kolName: "",
       productId: products[0]?.id ?? "",
-      templateId: templates[0]?.id ?? "",
-      lang: templates[0]?.lang ?? "en",
+      templateId: "", // AI picks the template from the pasted info
+      lang: "en",
       fields: emptyFields(),
       mods: [],
       createdAt: now,
